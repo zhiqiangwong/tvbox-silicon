@@ -819,6 +819,11 @@ struct DiscoverScrollObserver: ViewModifier {
 private struct DiscoverHero: View {
     let item: TMDBCatalog.Item
     let details: TMDBMatch.Details?
+    private var subtitle: String {
+        let genres = details?.genres.prefix(2).joined(separator: " / ") ?? item.genreNames
+        let year = item.year.map { String($0) } ?? ""
+        return [genres, details?.date ?? year].filter { !$0.isEmpty }.joined(separator: " · ")
+    }
     var body: some View { AppPerceptionTracking {
         GeometryReader { proxy in
             AppPerceptionTracking {
@@ -835,8 +840,7 @@ private struct DiscoverHero: View {
                 }
                 .frame(width: proxy.size.width * 0.8, height: 145, alignment: .bottom)
                 .padding(.bottom, 15)
-                Text([details?.genres.prefix(2).joined(separator: " / ") ?? item.genreNames,
-                      details?.date ?? item.year.map(String.init) ?? ""].filter { !$0.isEmpty }.joined(separator: " · "))
+                Text(subtitle)
                     .font(.system(size: 14)).lineLimit(1).frame(height: 17)
                 Text("「\(item.name)」" + item.overview)
                     .font(.system(size: 12)).lineLimit(2).multilineTextAlignment(.center)
