@@ -68,6 +68,8 @@ struct TVMInput {
     int64_t size, position;
     /// The file `tvm_open_file` opened, closed with the input; -1 otherwise.
     int descriptor;
+    /// The H.264 stream x264 encoded with intra refresh, -1 when none.
+    int intraRefresh;
 };
 
 static int input_read(void *opaque, uint8_t *buffer, int size) {
@@ -127,6 +129,59 @@ static void probe_colors(AVFormatContext *format) {
     }
 }
 
+/// A Matroska file written as a stream (a recording, FFmpeg's `-live`, a pipe) has no Duration, and one FFmpeg wrote
+/// from a clock that doesn't start at zero gives the time it ends there instead of its length. The packets at the
+/// end of the file say how long it is: a few MB of it are read, more only when no cluster starts in them.
+static void probe_end(TVMInput *input) {
+    AVFormatContext *format = input->format;
+    int64_t start = format->start_time == AV_NOPTS_VALUE ? 0 : format->start_time;
+    int unknown = format->duration == AV_NOPTS_VALUE || format->duration <= 0;
+    if (input->size <= 0 || strncmp(format->iformat->name, "matroska", 8) || (!unknown && start <= 500000)) return;
+    AVPacket *packet = av_packet_alloc();
+    if (!packet) return;
+    int64_t end = AV_NOPTS_VALUE;
+    for (int64_t window = 4 << 20; end == AV_NOPTS_VALUE; window *= 4) {
+        if (av_seek_frame(format, -1, FFMAX(input->size - window, 0), AVSEEK_FLAG_BYTE) < 0) break;
+        for (int count = 0; count < 200000 && av_read_frame(format, packet) >= 0; count++) {
+            const AVStream *st = format->streams[packet->stream_index];
+            int64_t time = packet->pts != AV_NOPTS_VALUE ? packet->pts : packet->dts;
+            if (time != AV_NOPTS_VALUE) {
+                int64_t at = av_rescale_q(time + FFMAX(packet->duration, 0), st->time_base, AV_TIME_BASE_Q);
+                if (end == AV_NOPTS_VALUE || at > end) end = at;
+            }
+            av_packet_unref(packet);
+        }
+        if (window >= input->size || window >= (256 << 20)) break;
+    }
+    av_packet_free(&packet);
+    av_seek_frame(format, -1, 0, AVSEEK_FLAG_BYTE);
+    if (end == AV_NOPTS_VALUE || end <= start) return;
+    // A Duration that is the end time runs past the last packet by the start; one that is the length doesn't.
+    if (unknown || (start + format->duration > end + 2000000 && llabs(format->duration - end) < 2000000)) format->duration = end - start;
+}
+
+/// x264's intra refresh has no keyframe after the first: what it marks as keyframes are recovery points, where
+/// AVPlayer can't start decoding, so a segment that starts there shows no picture. x264 writes its settings into
+/// the first picture. Reads the first packets, and the caller goes back to the start; -2 when it read none.
+static int probe_intra_refresh(AVFormatContext *format) {
+    int video = -1;
+    for (unsigned index = 0; index < format->nb_streams && video < 0; index++) {
+        const AVStream *st = format->streams[index];
+        if (st->codecpar->codec_type == AVMEDIA_TYPE_VIDEO && !(st->disposition & AV_DISPOSITION_ATTACHED_PIC)) video = (int)index;
+    }
+    if (video < 0 || format->streams[video]->codecpar->codec_id != AV_CODEC_ID_H264) return -2;
+    AVPacket *packet = av_packet_alloc();
+    int found = -1;
+    for (int count = 0; packet && count < 64 && av_read_frame(format, packet) >= 0; count++) {
+        int first = packet->stream_index == video;
+        if (first && packet->data && memmem(packet->data, packet->size, "intra_refresh=1", 15)) found = video;
+        av_packet_unref(packet);
+        if (first) break;
+    }
+    av_packet_free(&packet);
+    return found;
+}
+
 /// `prepare`: probe the colours and go back to the first keyframe, as playing needs. Without it the reader stays
 /// at the start of the file, with what finding the streams read still to come.
 static TVMInput *open_input(void *context, TVMReadFunction read, TVMInterruptFunction interrupted, int64_t size, int prepare,
@@ -135,6 +190,7 @@ static TVMInput *open_input(void *context, TVMReadFunction read, TVMInterruptFun
     if (!input) { fail(error, errorSize, AVERROR(ENOMEM), "open"); return NULL; }
     input->context = context; input->read = read; input->interrupted = interrupted; input->size = size;
     input->descriptor = -1;
+    input->intraRefresh = -1;
     const int bufferSize = 256 << 10;
     uint8_t *buffer = av_malloc(bufferSize);
     input->io = buffer ? avio_alloc_context(buffer, bufferSize, 0, input, input_read, NULL, size >= 0 ? input_seek : NULL) : NULL;
@@ -157,8 +213,15 @@ static TVMInput *open_input(void *context, TVMReadFunction read, TVMInterruptFun
     if (status < 0) { tvm_close(input); fail(error, errorSize, status, "stream info"); return NULL; }
     if (!prepare) return input;
     if (size >= 0) probe_colors(format);
+    if (size >= 0) probe_end(input);
     // Matroska reads its Cues (the keyframe index) at the first seek; back to the start does it now.
-    if (size >= 0) av_seek_frame(format, -1, format->start_time == AV_NOPTS_VALUE ? 0 : format->start_time, AVSEEK_FLAG_BACKWARD);
+    int64_t first = format->start_time == AV_NOPTS_VALUE ? 0 : format->start_time;
+    if (size >= 0) av_seek_frame(format, -1, first, AVSEEK_FLAG_BACKWARD);
+    int intraRefresh = size >= 0 ? probe_intra_refresh(format) : -2;
+    if (intraRefresh != -2) {
+        input->intraRefresh = intraRefresh;
+        av_seek_frame(format, -1, first, AVSEEK_FLAG_BACKWARD);
+    }
     return input;
 }
 
@@ -217,6 +280,7 @@ int tvm_stream(const TVMInput *input, int index, TVMStream *out) {
         AVRational aspect = par->sample_aspect_ratio.num ? par->sample_aspect_ratio : st->sample_aspect_ratio;
         out->sampleAspectNum = aspect.num; out->sampleAspectDen = aspect.den;
         out->colorTransfer = par->color_trc; out->colorPrimaries = par->color_primaries;
+        out->intraRefresh = input->intraRefresh == index;
     }
     out->doviProfile = out->doviLevel = out->doviCompatibility = -1;
     const AVPacketSideData *dovi = av_packet_side_data_get(par->coded_side_data, par->nb_coded_side_data, AV_PKT_DATA_DOVI_CONF);
@@ -640,6 +704,35 @@ static void reset_track(Track *track) {
     track->lastFramePts = AV_NOPTS_VALUE;
 }
 
+/// MPEG-TS carries AAC in ADTS frames and no configuration record, which an MP4 needs. FFmpeg's muxer would strip
+/// the frame headers with a filter that fragmented output turns off, so the record is made from the stream's
+/// parameters (what an ADTS header holds) and `copy_audio` drops each frame's header.
+static void aac_configuration(AVCodecParameters *par) {
+    static const int rates[] = {96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350};
+    int sbr = par->profile == AV_PROFILE_AAC_HE || par->profile == AV_PROFILE_AAC_HE_V2;
+    int rate = sbr ? par->sample_rate / 2 : par->sample_rate, index = -1;
+    for (int i = 0; i < 13; i++) if (rates[i] == rate) index = i;
+    int channels = par->ch_layout.nb_channels;
+    if (par->profile == AV_PROFILE_AAC_HE_V2 && channels == 2) channels = 1;
+    if (channels == 8) channels = 7;
+    int object = par->profile >= AV_PROFILE_AAC_MAIN && par->profile <= AV_PROFILE_AAC_LTP ? par->profile + 1 : 2;
+    if (index < 0 || channels < 1 || channels > 7) return;
+    uint8_t *record = av_mallocz(2 + AV_INPUT_BUFFER_PADDING_SIZE);
+    if (!record) return;
+    record[0] = (uint8_t)(object << 3 | index >> 1);
+    record[1] = (uint8_t)((index & 1) << 7 | channels << 3);
+    par->extradata = record;
+    par->extradata_size = 2;
+}
+
+static void strip_adts(AVPacket *packet) {
+    if (packet->size < 7 || packet->data[0] != 0xFF || (packet->data[1] & 0xF6) != 0xF0) return;
+    int header = packet->data[1] & 1 ? 7 : 9;
+    if (packet->size <= header) return;
+    packet->data += header;
+    packet->size -= header;
+}
+
 TVMCursor *tvm_cursor_create(TVMInput *input, const TVMTrack *tracks, int count, int64_t offset) {
     if (count <= 0 || count > 64) return NULL;
     TVMCursor *cursor = av_mallocz(sizeof(TVMCursor));
@@ -676,8 +769,9 @@ TVMCursor *tvm_cursor_create(TVMInput *input, const TVMTrack *tracks, int count,
         track->outOffset = av_rescale_q(offset, AV_TIME_BASE_Q, track->outBase);
         track->nextSample = track->lastFramePts = AV_NOPTS_VALUE;
         track->fresh = 1;
-        const AVCodecParameters *par = track->in->codecpar;
+        AVCodecParameters *par = track->in->codecpar;
         enum AVCodecID codec = par->codec_id;
+        if (track->spec.mode == TVMModeCopy && codec == AV_CODEC_ID_AAC && !par->extradata_size) aac_configuration(par);
         track->delayed = track->spec.mode == TVMModeCopy &&
             (codec == AV_CODEC_ID_AC3 || codec == AV_CODEC_ID_EAC3 || codec == AV_CODEC_ID_TRUEHD ||
              (!par->extradata_size && (codec == AV_CODEC_ID_AAC || codec == AV_CODEC_ID_H264 || codec == AV_CODEC_ID_HEVC)));
@@ -860,6 +954,7 @@ static int convert_audio(TVMCursor *cursor, Track *track, AVPacket *packet) {
 /// Copied audio is retimed by its sample count: Matroska's millisecond clock would otherwise make every
 /// frame's duration jitter.
 static int copy_audio(Track *track, AVPacket *packet) {
+    if (track->in->codecpar->codec_id == AV_CODEC_ID_AAC) strip_adts(packet);
     av_packet_rescale_ts(packet, track->in->time_base, track->outBase);
     int64_t samples = packet->duration > 0 ? packet->duration : av_get_audio_frame_duration2(track->in->codecpar, packet->size);
     if (packet->pts == AV_NOPTS_VALUE) packet->pts = packet->dts;

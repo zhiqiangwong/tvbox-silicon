@@ -162,6 +162,159 @@ final class TVNavigationUITests: XCTestCase {
         for _ in 0..<3 where chips.contains(where: { $0.hasFocus }) { remote.press(.left); sleep(1) }
         XCTAssertFalse(chips.contains { $0.hasFocus } || file.hasFocus, "Left did not leave the episode rail")
     }
+    /// The address row on Add Subscription opens its alert and the app keeps answering the remote. On tvOS 27 any
+    /// alert or sheet over a page pushed in a tab froze the app: `openRoute` was a new closure on every update, so
+    /// the stack never settled (#272).
+    func testAddSubscriptionAddressOpensWithoutFreezing() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-qaSection", "settings", "-qaIsolatedData", "1",
+                               "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+        let remote = XCUIRemote.shared
+        let add = app.buttons["Add Subscription"].firstMatch
+        XCTAssertTrue(add.waitForExistence(timeout: 60), "Settings did not appear")
+        sleep(3)
+        // A notice about a newer version can cover the page at launch, with its OK in focus.
+        if app.buttons["OK"].exists { remote.press(.select); sleep(2) }
+        remote.press(.right); sleep(1)
+        for _ in 0..<20 where !add.hasFocus { remote.press(.down); usleep(600_000) }
+        XCTAssertTrue(add.hasFocus, "Add Subscription did not take focus")
+        remote.press(.select)
+        let address = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Subscription URL'")).firstMatch
+        XCTAssertTrue(address.waitForExistence(timeout: 10), "Add Subscription did not open")
+        sleep(2)
+        for _ in 0..<4 where !address.hasFocus { remote.press(.up); usleep(600_000) }
+        remote.press(.select)
+        XCTAssertTrue(app.alerts.firstMatch.waitForExistence(timeout: 10), "The address alert did not appear")
+        remote.press(.menu); sleep(2)
+        XCTAssertFalse(app.alerts.firstMatch.exists, "Back did not close the address alert")
+        XCTAssertTrue(address.exists, "Back from the alert left Add Subscription")
+        remote.press(.menu); sleep(2)
+        XCTAssertTrue(add.waitForExistence(timeout: 10), "Back did not return to Settings")
+        XCTAssertEqual(app.state, .runningForeground)
+    }
+    /// A typed address stays when the alert closes by anything but Cancel. tvOS 18 also shows the alert's text field
+    /// as a button under it, the first one Down reaches; selecting it closed the alert and dropped the address (#291).
+    func testAddSubscriptionKeepsTheTypedAddress() throws {
+        let typed = "http://127.0.0.1:8776/config.json"
+        let app = XCUIApplication()
+        // On tvOS 18, XCTest's runtime-issue hook crashed the app on a UIKit log fault when the text field took focus.
+        app.launchEnvironment = ["OS_ACTIVITY_MODE": "disable"]
+        app.launchArguments = ["-qaSection", "settings", "-qaIsolatedData", "1",
+                               "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+        let remote = XCUIRemote.shared
+        let add = app.buttons["Add Subscription"].firstMatch
+        XCTAssertTrue(add.waitForExistence(timeout: 60), "Settings did not appear")
+        sleep(3)
+        if app.buttons["OK"].exists { remote.press(.select); sleep(2) }
+        remote.press(.right); sleep(1)
+        for _ in 0..<20 where !add.hasFocus { remote.press(.down); usleep(600_000) }
+        remote.press(.select)
+        let address = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Subscription URL'")).firstMatch
+        XCTAssertTrue(address.waitForExistence(timeout: 10), "Add Subscription did not open")
+        sleep(2)
+        for _ in 0..<4 where !address.hasFocus { remote.press(.up); usleep(600_000) }
+        remote.press(.select)
+        let alert = app.alerts.firstMatch
+        XCTAssertTrue(alert.waitForExistence(timeout: 10), "The address alert did not appear")
+        sleep(1)
+        // Select opens the keyboard on the focused text field; Menu returns to the alert with the text kept.
+        remote.press(.select); sleep(3)
+        app.typeText(typed); sleep(1)
+        remote.press(.menu); sleep(2)
+        XCTAssertTrue(alert.exists, "Leaving the keyboard closed the alert")
+        let fieldButton = alert.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Subscription URL'")).firstMatch
+        let close = fieldButton.exists ? fieldButton : alert.buttons["Done"].firstMatch
+        for _ in 0..<3 where !close.hasFocus { remote.press(.down); usleep(700_000) }
+        for _ in 0..<2 where !close.hasFocus { remote.press(.right); usleep(700_000) }
+        XCTAssertTrue(close.hasFocus, "\(close.label) did not take focus")
+        remote.press(.select); sleep(2)
+        XCTAssertFalse(alert.exists, "\(close.label) did not close the alert")
+        XCTAssertTrue(address.label.hasSuffix(typed), "The typed address was not kept: \(address.label)")
+    }
+    /// Back on a title's page opened with Up Next's Show Details returns to Watch Now.
+    func testBackFromUpNextDetailsReturnsToWatchNow() throws {
+        let app = launchWatchNowWithHistory()
+        let remote = XCUIRemote.shared
+        let details = app.buttons["home.upNext.details"]
+        XCTAssertTrue(details.waitForExistence(timeout: 60), "Up Next did not appear")
+        sleep(3)
+        for _ in 0..<4 where !details.hasFocus { remote.press(.right); sleep(1) }
+        XCTAssertTrue(details.hasFocus, "Show Details did not take focus")
+        remote.press(.select)
+        try backFromDetails(app, to: details)
+    }
+
+    /// Back on a title's page opened from a Continue Watching card's menu returns to Watch Now.
+    func testBackFromContinueWatchingDetailsReturnsToWatchNow() throws {
+        let app = launchWatchNowWithHistory()
+        let remote = XCUIRemote.shared
+        let card = app.buttons["history.resume.1"]
+        XCTAssertTrue(card.waitForExistence(timeout: 60), "Continue Watching did not appear")
+        sleep(3)
+        // Focus starts in the tab sidebar: Right into Up Next, then Down to the row.
+        let resume = app.buttons["home.upNext.resume"]
+        for _ in 0..<4 where !resume.hasFocus { remote.press(.right); sleep(1) }
+        for _ in 0..<4 where !card.hasFocus { remote.press(.down); sleep(1) }
+        XCTAssertTrue(card.hasFocus, "The card did not take focus")
+        remote.press(.select, forDuration: 1.5)
+        let show = app.buttons["Show Details"]
+        XCTAssertTrue(show.waitForExistence(timeout: 5), "The card's menu did not open")
+        for _ in 0..<3 where !show.hasFocus { remote.press(.up); usleep(700_000) }
+        remote.press(.select)
+        try backFromDetails(app, to: card)
+    }
+
+    private func launchWatchNowWithHistory() -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = ["-qaSection", "home", "-qaIsolatedData", "1", "-qaResetHistory", "1", "-qaSeedHistory", "qa-standard:1",
+                               "-qaSubscription", "http://127.0.0.1:8776/config.json",
+                               "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+        return app
+    }
+
+    private func backFromDetails(_ app: XCUIApplication, to origin: XCUIElement) throws {
+        let favorite = app.buttons["detail.favorite"]
+        XCTAssertTrue(favorite.waitForExistence(timeout: 30), "The title's page did not open")
+        sleep(3)
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.lifetime = .keepAlways; add(shot)
+        XCUIRemote.shared.press(.menu)
+        sleep(3)
+        XCTAssertEqual(app.state, .runningForeground, "Back left the app")
+        XCTAssertFalse(favorite.exists, "Back did not leave the title's page")
+        XCTAssertTrue(origin.waitForExistence(timeout: 10) && origin.isHittable, "Back did not return to Watch Now")
+    }
+
+    /// Down from the download queue reaches the finished episodes under it while other episodes are still downloading.
+    func testRemoteReachesDownloadedEpisodesWhileOthersDownload() throws {
+        let app = XCUIApplication()
+        // Episodes 1 and 2 arrive at once, 3 and 4 take minutes (Scripts/qa-server.py).
+        app.launchArguments = ["-qaSection", "downloads", "-qaIsolatedData", "1", "-qaDownload", "qa-downloads:1:4", "-downloadsSimultaneous", "4",
+                               "-qaSubscription", "http://127.0.0.1:8776/downloads-config.json",
+                               "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+        let remote = XCUIRemote.shared
+        // What's New covers the page on a fresh install.
+        if app.buttons["OK"].waitForExistence(timeout: 20) { remote.press(.select); sleep(2) }
+        let episodes = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Play 第'"))
+        XCTAssertTrue(app.buttons["Pause"].firstMatch.waitForExistence(timeout: 60), "Nothing was downloading")
+        // Episodes 1 and 2 finish in a moment. Below a queue as tall as the screen, a lazy list never built them.
+        sleep(10)
+        XCTAssertTrue(app.buttons["Pause"].firstMatch.exists, "Nothing was still downloading")
+        let focused = app.descendants(matching: .any).matching(NSPredicate(format: "hasFocus == true")).firstMatch
+        remote.press(.right); sleep(1)
+        var trail: [String] = []
+        for _ in 0..<14 where !episodes.allElementsBoundByIndex.contains(where: { $0.hasFocus }) {
+            trail.append(focused.exists ? focused.label : "-")
+            remote.press(.down); usleep(800_000)
+        }
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.lifetime = .keepAlways; add(shot)
+        XCTAssertTrue(episodes.allElementsBoundByIndex.contains(where: { $0.hasFocus }),
+                      "Down never reached the downloaded episodes; focus went \(trail.joined(separator: " > "))")
+    }
+
     /// Poster titles are part of their card's label, so look for the text anywhere in a label.
     private func shown(_ text: String, in app: XCUIApplication) -> XCUIElement {
         app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", text)).firstMatch

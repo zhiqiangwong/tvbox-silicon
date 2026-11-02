@@ -39,7 +39,6 @@ struct PlaybackHistoryView: View {
             Text(L10n.text("Removing a title also clears its cached content and skip times."))
         }
     } }
-
     private var content: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Layout.headerSpacing) {
@@ -108,7 +107,7 @@ struct PlaybackHistoryView: View {
 enum HistoryMetrics {
     /// Continue Watching card width on Watch Now; the History page lets the grid size its cards.
     #if os(tvOS)
-    static let card: CGFloat = 240
+    static let card: CGFloat = DiscoverLayout.posterWidth
     #elseif os(macOS)
     static let card: CGFloat = 150
     #else
@@ -179,7 +178,6 @@ struct HistoryCard: View {
         .animation(.smooth(duration: 0.15), value: hovering)
         #endif
     } }
-
     /// Remove control, rose under the pointer. A pointer shows it; the context menu stays for touch and the remote.
     private var historyRemove: some View {
         ArtworkBadgeButton(symbol: "xmark", label: L10n.text("Remove from history"), destructive: true) {
@@ -239,10 +237,10 @@ struct HistoryCard: View {
     }
 
     private var cardLabel: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: centredCaptions ? .center : .leading, spacing: 8) {
             Color.clear.aspectRatio(2.0 / 3.0, contentMode: .fit)
                 .overlay { PosterImage(url: entry.context.poster, headers: entry.context.posterHeaders ?? [:]) }
-                .overlay(alignment: .bottom) {
+                .coverOverlay(alignment: .bottom) {
                     if entry.duration > 0 {
                         // White on the artwork, as in the TV app: the accent is near-black in light mode.
                         GeometryReader { proxy in
@@ -252,7 +250,7 @@ struct HistoryCard: View {
                         .frame(height: 5).padding(10)
                     }
                 }
-                .overlay(alignment: .topTrailing) {
+                .coverOverlay(alignment: .topTrailing) {
                     if let selection {
                         Image(systemName: selection ? "checkmark.circle.fill" : "circle")
                             .font(.title2).symbolRenderingMode(.palette)
@@ -261,7 +259,7 @@ struct HistoryCard: View {
                             .padding(8)
                     }
                 }
-                .overlay {
+                .coverOverlay(animated: true) {
                     AppPerceptionTracking {
                         // Preparing this title; choosing another card switches to that one.
                         if store.resumingHistoryID == entry.id {
@@ -272,20 +270,31 @@ struct HistoryCard: View {
                         }
                     }
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .posterClip(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .opacity(selection == false ? 0.6 : 1)
             Text(entry.context.videoName).font(.subheadline.weight(.semibold)).foregroundStyle(.primary).lineLimit(1)
+                .cardCaption()
             if details {
                 Text("\(entry.context.episodeName) · \(SourceLabel(entry.context.sourceName).text)")
-                    .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    .font(.caption).foregroundStyle(.secondary).lineLimit(1).cardCaption()
                 Text(HistoryFormat.status(entry)).font(.caption).monospacedDigit().foregroundStyle(.tertiary).lineLimit(1)
+                    .cardCaption()
             } else {
                 // The bar on the poster already says how far; the line names the episode.
-                Text(entry.context.episodeName).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                Text(entry.context.episodeName).font(.caption).foregroundStyle(.secondary).lineLimit(1).cardCaption()
             }
         }
         .frame(width: details ? nil : HistoryMetrics.card)
         .frame(maxWidth: details ? .infinity : nil, alignment: .leading)
+    }
+
+    /// On Apple TV's Watch Now the captions are centred under the cover, as Discover's.
+    private var centredCaptions: Bool {
+        #if os(tvOS)
+        !details
+        #else
+        false
+        #endif
     }
 
     @ViewBuilder private var menu: some View {

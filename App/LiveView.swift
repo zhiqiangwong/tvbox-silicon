@@ -102,7 +102,6 @@ struct LiveSourceCard: View {
         .background { TileSurface(focused: focused, radius: radius) }
         .accessibilityElement(children: .combine)
     } }
-
     /// "范明明（需开启V6网络）" → ("范明明", "需开启V6网络").
     static func split(_ name: String) -> (title: String, note: String?) {
         let text = name.trimmingCharacters(in: .whitespaces)
@@ -266,7 +265,7 @@ private struct TVChannelGuide: View {
                             category(value.isEmpty ? L10n.text("Ungrouped") : value, value: value)
                         }
                     }.padding(4)
-                }.scrollClipDisabled().tvFocusSection()
+                }.scrollClipDisabledCompat().tvFocusSection()
             }
 
             if loading {
@@ -294,7 +293,7 @@ private struct TVChannelGuide: View {
                                     .focused($focusedChannel, equals: channel.id)
                             }
                         }.padding(4)
-                    }.scrollClipDisabled().tvFocusSection()
+                    }.scrollClipDisabledCompat().tvFocusSection()
                 }
             }
         }
@@ -326,7 +325,6 @@ private struct TVChannelGuide: View {
             }.onExitCommand { showingSearch = false }
         }
     } }
-
     private func category(_ title: String, value: String?) -> some View {
         Button { group = value; focusedChannel = nil } label: { Text(title) }
             .buttonStyle(TVGuideCategoryStyle(selected: group == value))
@@ -437,7 +435,6 @@ struct FavoritesView: View {
         .screenBackdrop()
         .tabTitle(L10n.text("Favorites"))
     } }
-
     private var liveSection: some View {
         let channels = store.favorites.liveChannels
         return VStack(alignment: .leading, spacing: Layout.headerSpacing) {
@@ -607,7 +604,7 @@ private struct FavoriteEpisodeCard: View {
                     } else {
                         Text(episode.video.videoName).font(.subheadline.weight(.semibold)).foregroundStyle(.primary).lineLimit(1)
                     }
-                    Text(episode.episodeName).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    Text(episode.episodeName).font(.caption).foregroundStyle(.secondary).lineLimit(1).cardCaption()
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -625,7 +622,6 @@ private struct FavoriteEpisodeCard: View {
         .animation(.smooth(duration: 0.15), value: hovering)
         #endif
     } }
-
     /// The title's page, where a click on the card only plays the episode. A pointer shows it, as on history cards.
     @ViewBuilder private var detailsLink: some View {
         if let listing = episode.video.listingVideo(), let client = store.catalogClient(for: episode.video) {
@@ -712,7 +708,7 @@ struct ChannelCard: View {
                     }
                     Spacer(minLength: 0)
                 }.contentShape(Rectangle())
-            }.cardButton()
+            }.rowCardButton()
             Button { if drag?.active != true { store.toggleFavorite(channel) } } label: {
                 Image(systemName: favorite ? "heart.fill" : "heart")
                     .font(.title3).foregroundStyle(favorite ? Brand.rose : .secondary)

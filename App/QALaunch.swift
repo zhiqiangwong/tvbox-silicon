@@ -11,6 +11,7 @@ enum QALaunch {
     private static var sectionByKey: AppSection? {
         switch UserDefaults.standard.string(forKey: "qaSection") {
         case "home": .home
+        case "discover": .discover
         case "live": .live
         case "music": .music
         case "search": .search
@@ -30,6 +31,11 @@ enum QALaunch {
     static var scrollTarget: String? { UserDefaults.standard.string(forKey: "qaScroll") }
 
     @MainActor static func start(_ store: Store) async {
+        #if os(iOS)
+        // Temporary screenshot sessions only; a regular launch restores normal auto-lock.
+        UIApplication.shared.isIdleTimerDisabled = UserDefaults.standard.bool(forKey: "qaKeepAwake")
+        UserDefaults.standard.removeObject(forKey: "qaDiscoverTrailer")
+        #endif
         // `-qaAListServer <address>` adds that AList server to Cloud Files, as the Add form would.
         if let address = UserDefaults.standard.string(forKey: "qaAListServer"), let url = try? WebAddress.resolve(address) {
             if let server = await AList.probe(url) { _ = try? AListServers.add([server]) }
@@ -77,8 +83,20 @@ enum QALaunch {
             }
             await store.importSubscription(address: subscription)
         }
-        else if store.subscription == nil, !Distribution.isAppStore { await store.importSubscription(address: Store.defaultURL) }
+        else if section != .discover, store.subscription == nil, !Distribution.isAppStore { await store.importSubscription(address: Store.defaultURL) }
         if QASweep.enabled, let config = store.subscription { Task.detached(priority: .utility) { await QASweep.run(config) } }
+        // `-qaSeedHistory <source key>:<video id>` records that video's first episode as part watched, for Watch Now's
+        // Up Next and Continue Watching.
+        if let seed = UserDefaults.standard.string(forKey: "qaSeedHistory"), let config = store.subscription {
+            let parts = seed.split(separator: ":", maxSplits: 1).map(String.init)
+            if parts.count == 2, let site = config.sites.first(where: { $0.key == parts[0] }) {
+                let client = CatalogClient(site: site, origin: config.origin, jarURL: config.spiderURL).applying(config)
+                if let video = try? await client.detail(parts[1]), let episode = video.episodes.first {
+                    store.playbackHistory.record(PlaybackHistoryContext(origin: config.origin, site: site, video: video, episode: episode),
+                                                 position: 30, duration: 120)
+                }
+            }
+        }
         if let section { store.section = section }
         if let page, page.hasPrefix("search:") {
             // Let the tab settle first: switching sections suspends a search that is already running.
@@ -287,6 +305,17 @@ enum QALaunch {
             // `-qaPage plugin-sign-in:<baidu|aliyun>`: a source's sign-in prompt with a made-up code.
             case "plugin-sign-in":
                 if let prompt = PluginSignIn.Prompt.sample(drive: parts.dropFirst().first ?? "baidu") { QASheet { PluginSignInView(prompt: prompt) } }
+            #if !os(tvOS)
+            // `-qaPage catpaw-sign-in -qaCatPawBundle <index.js address> -qaCatPawSource /spider/<key>/3`: UC's TV token
+            // sheet against that bundle (on iPhone and iPad, a simulator with NodeMobile).
+            case "catpaw-sign-in":
+                let bundle = UserDefaults.standard.string(forKey: "qaCatPawBundle") ?? ""
+                let source = UserDefaults.standard.string(forKey: "qaCatPawSource") ?? "/spider/wogg/3"
+                let entry = try? JSONSerialization.data(withJSONObject: ["key": "qa_catpaw", "name": "CatPawOpen", "type": 3, "api": bundle, "catPawOpen": source])
+                if let origin = URL(string: bundle), let entry, let site = try? JSONDecoder().decode(Site.self, from: entry) {
+                    QASheet { CatPawSignInView(client: CatalogClient(site: site, origin: origin), provider: "ucToken") {} }
+                }
+            #endif
             #endif
             default: EmptyView()
             }
@@ -295,7 +324,7 @@ enum QALaunch {
 
     static func overrides(_ section: AppSection) -> Bool {
         guard section == self.section, let page else { return false }
-        return ["site", "detail", "open-detail", "channels", "runtime", "logs", "feedback", "telegram", "cache", "playback", "privacy", "licenses", "cloud-login", "cloud-accounts", "bilibili-account", "douyin-account", "douyin-login", "douyin-handoff", "bilibili-live", "live", "danmaku-list", "web-sign-in", "plugin-sign-in", "folder", "alist-add"].contains(page.split(separator: ":").first.map(String.init) ?? "")
+        return ["site", "detail", "open-detail", "channels", "runtime", "logs", "feedback", "telegram", "cache", "playback", "privacy", "licenses", "cloud-login", "cloud-accounts", "bilibili-account", "douyin-account", "douyin-login", "douyin-handoff", "bilibili-live", "live", "danmaku-list", "web-sign-in", "plugin-sign-in", "catpaw-sign-in", "folder", "alist-add"].contains(page.split(separator: ":").first.map(String.init) ?? "")
     }
 }
 

@@ -1,7 +1,8 @@
 import Foundation
 
-/// An AList (or OpenList) server in Cloud Files: where its API lives, the folder browsing starts
-/// in, and the account and folder password it may need. Kept beside the cloud-drive accounts.
+/// An AList (or OpenList) server, a WebDAV share or an Emby or Jellyfin server in Cloud Files: where
+/// its API lives, the folder browsing starts in, and the account and folder password it may need.
+/// Kept beside the cloud-drive accounts.
 public struct AListServer: Codable, Hashable, Identifiable, Sendable {
     public var id: String
     public var name: String
@@ -14,11 +15,17 @@ public struct AListServer: Codable, Hashable, Identifiable, Sendable {
     /// Sent with every request, as TVBox AList configurations do, for servers whose files sit
     /// behind one folder password.
     public var folderPassword: String
+    /// What answers at `address`. Nil in servers saved before WebDAV shares could be added, which are all AList.
+    public var kind: Kind?
+    public enum Kind: String, Codable, Sendable { case alist, webdav, emby }
+    public var isWebDAV: Bool { kind == .webdav }
+    /// An Emby or Jellyfin server: its folders are libraries and items, named by their ids.
+    public var isEmby: Bool { kind == .emby }
 
     public init(id: String = UUID().uuidString, name: String, address: String, root: String = "/",
-                username: String = "", password: String = "", folderPassword: String = "") {
+                username: String = "", password: String = "", folderPassword: String = "", kind: Kind? = nil) {
         self.id = id; self.name = name; self.address = address; self.root = root
-        self.username = username; self.password = password; self.folderPassword = folderPassword
+        self.username = username; self.password = password; self.folderPassword = folderPassword; self.kind = kind
     }
 
     /// The servers a TVBox AList configuration lists (`[{name, server, password, path, login}]`,
@@ -79,6 +86,7 @@ public enum AListServers {
         #if os(tvOS)
         UserDefaults.standard.set(data, forKey: defaultsKey)
         #endif
+        NotificationCenter.default.post(name: CloudFiles.drivesChanged, object: nil)
     }
 
     /// Adds servers, or updates the saved one at the same address and folder. Returns the servers as saved.
@@ -162,6 +170,24 @@ public actor AList {
             return CloudFile(id: (path == "/" ? "" : path) + "/" + name, name: name, isFolder: item["is_dir"] as? Bool ?? false,
                              size: (item["size"] as? NSNumber)?.int64Value ?? 0, modified: modified)
         }
+    }
+
+    /// Files and folders under the server's root whose names hold `keywords`, from its search index.
+    func search(_ server: AListServer, _ keywords: String, page: Int, size: Int) async throws -> (files: [CloudFile], total: Int) {
+        let data: [String: Any]
+        do {
+            data = try await call(server, "/api/fs/search", ["parent": server.root, "keywords": keywords, "scope": 0, "page": page,
+                                                             "per_page": size, "password": folderPassword(server, server.root)])
+        } catch TVError.unsupported(let message) where message.lowercased().contains("search not available") {
+            throw TVError.unsupported(L10n.text("%@ hasn't turned on search. Its administrator can build the search index in AList's settings.", server.name))
+        }
+        let files = (data["content"] as? [[String: Any]] ?? []).compactMap { item -> CloudFile? in
+            guard let name = item["name"] as? String, var parent = item["parent"] as? String else { return nil }
+            while parent.hasSuffix("/") { parent.removeLast() }
+            return CloudFile(id: parent + "/" + name, name: name, isFolder: item["is_dir"] as? Bool ?? false,
+                             size: (item["size"] as? NSNumber)?.int64Value ?? 0)
+        }
+        return (files, (data["total"] as? NSNumber)?.intValue ?? files.count)
     }
 
     func stream(_ server: AListServer, path: String, name: String) async throws -> URL {

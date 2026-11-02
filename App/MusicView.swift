@@ -124,7 +124,6 @@ struct MusicView: View {
             #endif
         }
     } }
-
     /// Apple TV leads with All, its results in rows; a phone or iPad has only the kinds.
     private static var chips: [MusicSearchKind] {
         #if os(tvOS)
@@ -279,7 +278,7 @@ private struct MusicContinueCard: View {
             .contentPanel(cornerRadius: 20)
             .contentShape(Rectangle())
         }
-        .cardButton()
+        .panelCardButton(cornerRadius: 20)
     } }
 }
 
@@ -438,7 +437,6 @@ struct MusicCollectionView: View {
             #endif
         }
     } }
-
     private var header: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(alignment: .center, spacing: MusicLayout.gap * 1.4) {

@@ -239,7 +239,7 @@ struct TMDBChoices: View {
                         .frame(width: TMDBMetrics.candidate, height: TMDBMetrics.candidate * 1.5)
                         .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                     }
-                    .tmdbCardButton()
+                    .panelCardButton(cornerRadius: 10)
                 }
                 .padding(.vertical, TMDBMetrics.focusRoom)
             }
@@ -266,10 +266,10 @@ struct TMDBCandidateTile: View {
         VStack(alignment: .leading, spacing: 6) {
             PosterImage(url: poster)
                 .frame(width: TMDBMetrics.candidate, height: TMDBMetrics.candidate * 1.5)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            Text(name).font(.caption.weight(.semibold)).lineLimit(2).multilineTextAlignment(.leading)
+                .posterClip(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            Text(name).font(.caption.weight(.semibold)).lineLimit(2).multilineTextAlignment(.leading).cardCaption()
             Text([year.map(String.init), L10n.text(mediaType == .tv ? "TV Series" : "Movie")].compactMap { $0 }.joined(separator: " · "))
-                .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                .font(.caption2).foregroundStyle(.secondary).lineLimit(1).cardCaption()
         }
         .frame(width: TMDBMetrics.candidate, alignment: .leading)
         .foregroundStyle(.primary)
@@ -591,7 +591,7 @@ struct TMDBBanner<Actions: View>: View {
             let width = proxy.size.width
             ZStack(alignment: .bottomLeading) {
                 Color(white: 0.12)
-                TMDBArtwork(url: backdrop, maxPixels: 2400).frame(width: width, height: proxy.size.height).clipped()
+                TMDBArtwork(url: backdrop, maxPixels: TMDBBannerMetrics.backdropPixels).frame(width: width, height: proxy.size.height).clipped()
                 LinearGradient(stops: [.init(color: .black.opacity(0.0), location: 0.35), .init(color: .black.opacity(0.82), location: 1)],
                                startPoint: .top, endPoint: .bottom)
                 LinearGradient(stops: [.init(color: .black.opacity(0.55), location: 0), .init(color: .clear, location: 0.6)],
@@ -652,6 +652,7 @@ enum TMDBBannerMetrics {
     static let textWidth: CGFloat = 760
     static let factsFont = Font.subheadline
     #endif
+    static let backdropPixels = 2400
 }
 
 /// TMDB's banner made from the source's own cover, until TMDB's backdrop is in and for titles TMDB doesn't
@@ -736,23 +737,27 @@ struct TMDBEpisodeTile: View {
         VStack(alignment: .leading, spacing: 6) {
             Color.clear.aspectRatio(16.0 / 9.0, contentMode: .fit)
                 .overlay {
-                    if let still = info?.still { PosterImage(url: still, symbol: "play.rectangle") } else { EpisodeNumberArt(name: name) }
+                    if let still = info?.still {
+                        PosterImage(url: still, symbol: "play.rectangle")
+                    } else {
+                        EpisodeNumberArt(name: name).overlay { CoverOverlayStack() }
+                    }
                 }
-                .overlay { if loading { ProgressView().padding(8).background(.black.opacity(0.45), in: Circle()) } }
-                .overlay(alignment: .bottomTrailing) {
+                .coverOverlay(animated: true) { if loading { ProgressView().padding(8).background(.black.opacity(0.45), in: Circle()) } }
+                .coverOverlay(alignment: .bottomTrailing) {
                     if let runtime = info?.runtime, runtime > 0 {
                         Text(L10n.text("%lld min", Int(runtime))).font(.caption2.weight(.semibold)).monospacedDigit()
                             .padding(.horizontal, 6).padding(.vertical, 2)
                             .background(.black.opacity(0.55), in: Capsule()).foregroundStyle(.white).padding(6)
                     }
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay { if current { RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Brand.accent, lineWidth: 2) } }
+                .posterClip(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .coverOverlay { if current { RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Brand.accent, lineWidth: 2) } }
             Text(name).font(.subheadline.weight(current ? .bold : .semibold)).lineLimit(1)
-                .foregroundStyle(current ? Brand.accent : .primary)
+                .foregroundStyle(current ? Brand.accent : .primary).cardCaption()
             // Always a second line, so tiles in a row stay one height.
             Text(info.map(\.name).flatMap { $0.isEmpty || $0 == name ? nil : $0 } ?? " ")
-                .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                .font(.caption).foregroundStyle(.secondary).lineLimit(1).cardCaption()
         }
         .frame(width: width, alignment: .leading)
         .frame(maxWidth: width == nil ? .infinity : nil, alignment: .leading)
@@ -781,16 +786,23 @@ struct TMDBArtwork: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task(id: url) {
             if let cached = Self.cache.object(forKey: url as NSURL) { show(cached.image); return }
-            guard let (data, _) = try? await URLSession.shared.data(from: url),
-                  let source = CGImageSourceCreateWithData(data as CFData, nil),
-                  let decoded = CGImageSourceCreateThumbnailAtIndex(source, 0, [
-                    kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceCreateThumbnailWithTransform: true,
-                    kCGImageSourceThumbnailMaxPixelSize: maxPixels, kCGImageSourceShouldCacheImmediately: true,
-                  ] as CFDictionary), !Task.isCancelled else { return }
-            Self.cache.setObject(Box(decoded), forKey: url as NSURL)
+            guard let decoded = await Self.load(url, maxPixels: maxPixels), !Task.isCancelled else { return }
             withAnimation(.easeOut(duration: 0.3)) { show(decoded) }
         }
     } }
+
+    /// Downloads and decodes `url` into the shared cache; nil when it doesn't load.
+    static func load(_ url: URL, maxPixels: Int) async -> CGImage? {
+        if let cached = cache.object(forKey: url as NSURL) { return cached.image }
+        guard let (data, _) = try? await URLSession.shared.data(from: url),
+              let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let decoded = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: maxPixels, kCGImageSourceShouldCacheImmediately: true,
+              ] as CFDictionary) else { return nil }
+        cache.setObject(Box(decoded), forKey: url as NSURL)
+        return decoded
+    }
 
     private func show(_ decoded: CGImage) {
         image = decoded

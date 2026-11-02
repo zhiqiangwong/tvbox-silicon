@@ -320,6 +320,7 @@ extension View {
 
 /// The notes under settings switches, shared by Settings and the pages under it.
 private enum SettingsNote {
+    static var playbackInfo: String { L10n.text("Shows the video's format, resolution, frame rate and bitrate in a corner of the player.") }
     static var danmaku: String { L10n.text("Bilibili's bullet comments, drawn over the video. You can also switch them in the player.") }
     static var tmdb: String {
         L10n.text("Shows cast, artwork and episode details from TMDB on video pages. Sends the video's title, its details from the source and the source's name to Yingxia's lookup service, never your accounts or subscription addresses.")
@@ -357,6 +358,7 @@ struct FormSettingsView: View {
     #if os(macOS)
     @AppStorage(BilibiliCastController.key) private var receivesCasts = true
     @AppStorage(PlayOnController.key) private var receivesPlayOn = true
+    @AppStorage(PlaybackInfo.key) private var showsPlaybackInfo = false
     #endif
     private var version: String? {
         (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String).flatMap { $0.isEmpty ? nil : L10n.text("Version %@", $0) }
@@ -500,7 +502,7 @@ struct FormSettingsView: View {
                         FormLabel(symbol: "tv.and.mediabox.fill", tint: BilibiliMark.blue, title: L10n.text("Cast from the Bilibili App"),
                                   subtitle: L10n.text("With your phone on the same network, tap the TV button in a Bilibili video and choose %@.", L10n.text("Yingxia")))
                     }
-                    .onChange(of: receivesCasts) { _, on in
+                    .onChangeCompat(of: receivesCasts) { _, on in
                         if on { BilibiliCastController.shared.start(store) } else { BilibiliCastController.shared.stop() }
                     }
                 }
@@ -509,9 +511,13 @@ struct FormSettingsView: View {
                               subtitle: L10n.text("With Yingxia open here, your other devices on the same network can send it what they play: tap Play On in their player."))
                 }
                 .settingsSwitch()
-                .onChange(of: receivesPlayOn) { _, on in
+                .onChangeCompat(of: receivesPlayOn) { _, on in
                     if on { PlayOnController.shared.start(store) } else { PlayOnController.shared.stop() }
                 }
+                Toggle(isOn: $showsPlaybackInfo) {
+                    FormLabel(symbol: "info.circle.fill", tint: .blue, title: L10n.text("Show Video Info"), subtitle: SettingsNote.playbackInfo)
+                }
+                .settingsSwitch()
                 FormLink(symbol: "play.fill", tint: Brand.indigo, title: L10n.text("Play a URL")) { PlayURLView() }
             } header: {
                 Text(L10n.text("Playback"))
@@ -550,7 +556,7 @@ struct FormSettingsView: View {
                     FormLabel(symbol: "ladybug.fill", tint: .red, title: L10n.text("Send Error Reports"), subtitle: errorReportsNote)
                 }
                 .settingsSwitch()
-                .onChange(of: sendsErrorReports) { _, on in if !on { ErrorReports.shared.discard() } }
+                .onChangeCompat(of: sendsErrorReports) { _, on in if !on { ErrorReports.shared.discard() } }
                 Toggle(isOn: $looksUpTMDB) {
                     FormLabel(symbol: "film.stack.fill", tint: .teal, title: L10n.text("Look Up Titles on TMDB"), subtitle: tmdbNote)
                 }
@@ -673,7 +679,6 @@ struct FormSettingsView: View {
         .onAppear { bilibiliSummary = BilibiliAccount.load().summary; douyinSummary = DouyinAccount.load().summary; cloudSummary = CloudProvider.summary() }
         .task(id: store.extrasUnlocked) { if store.extrasUnlocked { await ContributorList.shared.check() } }
     } }
-
     @ViewBuilder private var heroSection: some View {
         #if os(iOS)
         // The app on the page's own canvas, not in a card: its icon lit by a glow of itself, the name large, and the
@@ -828,6 +833,7 @@ struct PlaybackSettingsView: View {
     @AppStorage(PictureLevel.key) private var slidesLevels = true
     @AppStorage(VideoEnhancement.upscaleKey) private var upscalesVideo = false
     @AppStorage(VideoEnhancement.smoothKey) private var smoothsVideo = false
+    @AppStorage(PlaybackInfo.key) private var showsPlaybackInfo = false
     var body: some View { AppPerceptionTracking {
         SettingsPage(title: L10n.text("Playback"), symbol: "slider.horizontal.below.rectangle") {
             SettingsGroup(footer: L10n.text("Touch and hold the video to play at this speed. Slide sideways to change it, or slide down to keep it after you let go.")) {
@@ -840,6 +846,12 @@ struct PlaybackSettingsView: View {
             SettingsGroup(footer: L10n.text("Slide up or down on the left of the video to change the brightness, or on the right to change the volume.")) {
                 Toggle(isOn: $slidesLevels) {
                     FormLabel(symbol: "sun.max.fill", tint: .yellow, title: L10n.text("Slide for Brightness and Volume"))
+                }
+                .settingsSwitch()
+            }
+            SettingsGroup(footer: SettingsNote.playbackInfo) {
+                Toggle(isOn: $showsPlaybackInfo) {
+                    FormLabel(symbol: "info.circle.fill", tint: .blue, title: L10n.text("Show Video Info"))
                 }
                 .settingsSwitch()
             }
@@ -951,7 +963,6 @@ private struct AddSubscriptionSheet: View {
         .presentationDetents([.medium, .large])
         .onAppear { store.error = nil; focused = true }
     } }
-
     private func add() {
         guard canAdd else { return }
         Task {
@@ -1490,6 +1501,7 @@ struct TVSettingsView: View {
     @AppStorage(VideoEnhancement.smoothKey) private var smoothsVideo = false
     @AppStorage(BilibiliCastController.key) private var receivesCasts = true
     @AppStorage(PlayOnController.key) private var receivesPlayOn = true
+    @AppStorage(PlaybackInfo.key) private var showsPlaybackInfo = false
     @AppStorage(ErrorReports.key) private var sendsErrorReports = true
     @AppStorage(TMDBMatch.key) private var looksUpTMDB = true
     @AppStorage(CloudSync.enabledKey) private var syncsWithICloud = true
@@ -1524,15 +1536,18 @@ struct TVSettingsView: View {
                     TVSettingsToggle(title: L10n.text("Show Danmaku"), isOn: $showsDanmaku)
                     TVSettingsAction(title: L10n.text("Danmaku Area"), value: danmakuArea.title) { danmakuArea = danmakuArea.next }
                     TVSettingsToggle(title: L10n.text("Cast from the Bilibili App"), isOn: $receivesCasts)
-                        .onChange(of: receivesCasts) { _, on in
+                        .onChangeCompat(of: receivesCasts) { _, on in
                             if on { BilibiliCastController.shared.start(store) } else { BilibiliCastController.shared.stop() }
                         }
                 }
                 TVSettingsToggle(title: L10n.text("Play from Other Devices"), isOn: $receivesPlayOn)
-                    .onChange(of: receivesPlayOn) { _, on in
+                    .onChangeCompat(of: receivesPlayOn) { _, on in
                         if on { PlayOnController.shared.start(store) } else { PlayOnController.shared.stop() }
                     }
                 TVSettingsLink(title: L10n.text("Play a URL")) { TVPlayURLPage() }
+            }
+            TVSettingsSection(footer: L10n.text("Shows the video's format, resolution, frame rate and bitrate in a corner of the player.")) {
+                TVSettingsToggle(title: L10n.text("Show Video Info"), isOn: $showsPlaybackInfo)
             }
             if VideoEnhancement.canUpscale || VideoEnhancement.canSmooth {
                 TVSettingsSection(title: L10n.text("Picture"), footer: VideoEnhancement.note) {
@@ -1546,7 +1561,7 @@ struct TVSettingsView: View {
                 if store.extrasUnlocked { TVSettingsLink(title: L10n.text("JAR Runtime and Compatibility")) { RuntimeView() } }
                 TVSettingsLink(title: L10n.text("Diagnostic Logs")) { DiagnosticsView() }
                 TVSettingsToggle(title: L10n.text("Send Error Reports"), isOn: $sendsErrorReports)
-                    .onChange(of: sendsErrorReports) { _, on in if !on { ErrorReports.shared.discard() } }
+                    .onChangeCompat(of: sendsErrorReports) { _, on in if !on { ErrorReports.shared.discard() } }
                 TVSettingsToggle(title: L10n.text("Look Up Titles on TMDB"), isOn: $looksUpTMDB)
             }
             if updates.available.isEmpty, Updates.channel != .none { updateSection }
@@ -1561,7 +1576,6 @@ struct TVSettingsView: View {
         .onAppear { bilibiliSummary = BilibiliAccount.load().summary; douyinSummary = DouyinAccount.load().summary; cloudSummary = CloudProvider.summary() }
         .task(id: store.extrasUnlocked) { if store.extrasUnlocked { await ContributorList.shared.check() } }
     } }
-
     private var playbackFooter: String {
         let phones = L10n.text("With Yingxia open here, your other devices on the same network can send it what they play: tap Play On in their player.")
         guard store.extrasUnlocked else { return phones }
@@ -1621,7 +1635,7 @@ struct TVSettingsLayout<Hero: View, List: View>: View {
                     .glassRowInsets()
                     .padding(.vertical, 40)
             }
-            .scrollClipDisabled()
+            .scrollClipDisabledCompat()
             .tvFocusSection()
         }
         .padding(.horizontal, Layout.gutter)
@@ -1756,8 +1770,9 @@ struct TVSettingsField: View {
     var prose = false
     @State private var editing = false
     @State private var draft = ""
+    @State private var cancelled = false
     var body: some View { AppPerceptionTracking {
-        Button { draft = text; editing = true } label: {
+        Button { draft = text; cancelled = false; editing = true } label: {
             TVSettingsRowLabel(title: title, value: text.isEmpty ? L10n.text("Not set") : text)
         }
         .glassRow()
@@ -1765,8 +1780,13 @@ struct TVSettingsField: View {
             TextField(title, text: $draft)
                 .autocorrectionDisabled(!prose)
                 .textInputAutocapitalization(prose ? .sentences : .never).keyboardType(prose ? .default : .URL)
-            Button(L10n.text("Done")) { text = draft.trimmingCharacters(in: .whitespacesAndNewlines) }
-            Button(L10n.text("Cancel"), role: .cancel) {}
+            Button(L10n.text("Done")) {}
+            Button(L10n.text("Cancel"), role: .cancel) { cancelled = true }
+        }
+        // Closing the alert any way but Cancel keeps the text. tvOS 18 also shows the text field as a second
+        // button under it, which closes the alert without running any action, so a typed address was lost (#291).
+        .onChangeCompat(of: editing) { _, open in
+            if !open, !cancelled { text = draft.trimmingCharacters(in: .whitespacesAndNewlines) }
         }
     } }
 }

@@ -12,7 +12,7 @@ struct MusicArtwork: View {
             .aspectRatio(1, contentMode: .fit)
             .overlay { PosterImage(url: url, symbol: symbol) }
             .frame(width: size, height: size)
-            .clipShape(RoundedRectangle(cornerRadius: size.map { max(4, $0 * 0.12) } ?? 12, style: .continuous))
+            .posterClip(RoundedRectangle(cornerRadius: size.map { max(4, $0 * 0.12) } ?? 12, style: .continuous))
     } }
 }
 
@@ -63,7 +63,6 @@ struct MusicMiniPlayer: View {
         .task { if UserDefaults.standard.string(forKey: "qaNowPlaying") != nil { music.presentsPlayer = true } }
         #endif
     } }
-
     private func button(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol).frame(width: 36, height: 36).contentShape(.rect)

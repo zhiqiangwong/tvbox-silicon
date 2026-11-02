@@ -1,6 +1,8 @@
 import AVFoundation
+import CommonCrypto
 import Foundation
 import Testing
+import VideoToolbox
 @testable import TVCore
 
 // The repackager keeps three files open; tests opening more at once would close each other's.
@@ -41,6 +43,13 @@ import Testing
         #expect(plan.tracks[3].bitRate == 384_000 && plan.tracks[4].bitRate == 160_000)
         // No picture, nothing to play.
         #expect(RemuxPlan.make(streams: [streams[1]], keyframes: [], start: 0, duration: 1, size: 0, device: .init()) == nil)
+    }
+
+    @Test func intraRefreshPicturesAreConverted() {
+        var stream = Stream(index: 0, kind: .video, codec: "h264", width: 1920, height: 1080)
+        #expect(RemuxPlan.videoTrack(stream, device: RemuxPlan.Device()).mode == .copy)
+        stream.intraRefresh = true
+        #expect(RemuxPlan.videoTrack(stream, device: RemuxPlan.Device()).mode == .h264)
     }
 
     @Test func onlyPicturesTheDeviceCantDecodeAreConverted() {
@@ -246,6 +255,25 @@ import Testing
         #expect(played.status == .readyToPlay && abs(played.duration - 8) < 0.2)
     }
 
+    /// iOS and tvOS take back a suspended app's listening sockets, and the address AVPlayer holds then refuses.
+    @Test func aServerThatStoppedListeningListensAgain() async throws {
+        let url = try await Remux.open(try Remux.fileSource(fixture("remux-copy.mkv")))
+        let id = url.deletingLastPathComponent().lastPathComponent
+        // Its own server, so files other tests play on the shared one keep their address.
+        let server = RemuxServer()
+        let stale = try await server.base()
+        let fresh = try await server.base(replacing: stale)
+        #expect(fresh.port != stale.port)
+        // Another address that failed with it shares the new listener.
+        #expect(try await server.base(replacing: stale) == fresh)
+        await #expect(throws: URLError.self) { try await URLSession.shared.data(from: stale.appending(path: "\(id)/master.m3u8")) }
+        let master = String(decoding: try await fetch(fresh.appending(path: "\(id)/master.m3u8")), as: UTF8.self)
+        #expect(master.contains("#EXTM3U"))
+        // A file closed meanwhile has no address to come back to.
+        Remux.stop(url)
+        #expect(try await Remux.relisten(url) == nil)
+    }
+
     @Test func subtitleFilesPlayAsSubtitlesOfTheStream() async throws {
         let srt = RangeServer.add("film-\(UUID().uuidString).srt", Data("1\n00:00:07,000 --> 00:00:07,500\n从文件来的字幕\n".utf8))
         let missing = URL(string: "https://cloud.test/missing.srt")!
@@ -296,6 +324,22 @@ import Testing
         #expect(played.status == .readyToPlay && abs(played.duration - 4) < 0.2)
     }
 
+    /// Without AV1 hardware (Macs before the M3, iPhones before the 15 Pro, Apple TV), dav1d decodes AV1 for the
+    /// conversion; FFmpeg alone has no AV1 decoder. With the hardware the picture is copied.
+    @Test func av1PlaysWithOrWithoutAV1Hardware() async throws {
+        let url = try await Remux.open(try Remux.fileSource(fixture("remux-av1.mkv")))
+        defer { Remux.stop(url) }
+        let master = String(decoding: try await fetch(url), as: UTF8.self)
+        #expect(master.contains(VTIsHardwareDecodeSupported(kCMVideoCodecType_AV1) ? "CODECS=\"av01." : "CODECS=\"avc1."))
+        let video = String(decoding: try await fetch(url.deletingLastPathComponent().appending(path: "0.m3u8")), as: UTF8.self)
+        for name in video.split(separator: "\n").filter({ !$0.hasPrefix("#") }) {
+            let segment = try await fetch(url.deletingLastPathComponent().appending(path: String(name)))
+            #expect(segment.count > 500 && segment.subdata(in: 4..<8) == Data("moof".utf8), "\(name)")
+        }
+        let played = await ready(url)
+        #expect(played.status == .readyToPlay && abs(played.duration - 8) < 0.2)
+    }
+
     // MARK: - Links
 
     @Test func aLinkThatSendsTheRestOfTheFileIsReadThroughOneResponse() async throws {
@@ -341,10 +385,195 @@ import Testing
         #expect(played.status == .readyToPlay && abs(played.duration - 8) < 0.2)
     }
 
+    /// The segments a track's playlist lists, and how long they run together.
+    private func playlist(_ master: URL, track: Int) async throws -> (segments: [String], seconds: Double) {
+        let text = String(decoding: try await fetch(master.deletingLastPathComponent().appending(path: "\(track).m3u8")), as: UTF8.self)
+        let lines = text.split(separator: "\n")
+        let seconds = lines.compactMap { $0.wholeMatch(of: /#EXTINF:([0-9.]+),/).flatMap { Double($0.1) } }.reduce(0, +)
+        return (lines.filter { !$0.hasPrefix("#") }.map(String.init), seconds)
+    }
+
+    /// A Matroska file written as a stream (FFmpeg's `-live`, a recording, a pipe) has no Duration and no Cues. The
+    /// end of the file says how long it is, from a drive and from a plugin's proxy alike.
+    @Test func matroskaWithoutADurationPlays() async throws {
+        for proxy in [false, true] {
+            let url = RangeServer.add("live-\(UUID().uuidString).mkv", try Data(contentsOf: fixture("remux-live.mkv")), restOfFile: proxy)
+            let source = try await Remux.httpSource(url, headers: [:], chunks: RangeServer.session, configuration: RangeServer.configuration)
+            let master = try await Remux.open(source)
+            defer { Remux.stop(master) }
+            let video = try await playlist(master, track: 0)
+            #expect(abs(video.seconds - 8) < 0.3, "proxy=\(proxy) \(video.seconds)")
+            let last = try await fetch(master.deletingLastPathComponent().appending(path: try #require(video.segments.last)))
+            #expect(last.count > 500 && last.subdata(in: 4..<8) == Data("moof".utf8))
+            let played = await ready(master)
+            #expect(played.status == .readyToPlay && abs(played.duration - 8) < 0.3, "proxy=\(proxy)")
+        }
+    }
+
+    /// FFmpeg writes the time a file ends as its Duration. One whose clock starts at 10 s is 8 s long, not 18 s
+    /// with 10 s of nothing at the end, where a seek never finished.
+    @Test func matroskaWhoseClockStartsLaterKeepsItsLength() async throws {
+        let master = try await Remux.open(try Remux.fileSource(fixture("remux-offset.mkv")))
+        defer { Remux.stop(master) }
+        let video = try await playlist(master, track: 0)
+        #expect(abs(video.seconds - 8) < 0.3, "\(video.seconds)")
+        for name in video.segments {
+            let segment = try await fetch(master.deletingLastPathComponent().appending(path: name))
+            #expect(segment.count > 500 && segment.subdata(in: 4..<8) == Data("moof".utf8), "\(name)")
+        }
+    }
+
+    /// x264's intra refresh marks recovery points as keyframes; AVPlayer starts no picture there, so after a seek
+    /// it showed none. The picture is converted, which gives every segment a real keyframe.
+    @Test func intraRefreshIsConverted() async throws {
+        let master = try await Remux.open(try Remux.fileSource(fixture("remux-intra-refresh.mkv")))
+        defer { Remux.stop(master) }
+        let id = try #require(master.pathComponents.dropLast().last)
+        #expect(RemuxStore.shared.session(id)?.plan.tracks.first?.mode == .h264)
+        let video = try await playlist(master, track: 0)
+        let later = try await fetch(master.deletingLastPathComponent().appending(path: try #require(video.segments.last)))
+        #expect(later.subdata(in: 4..<8) == Data("moof".utf8))
+        // A file without intra refresh is copied as before.
+        let plain = try await Remux.open(try Remux.fileSource(fixture("remux-live.mkv")))
+        defer { Remux.stop(plain) }
+        #expect(RemuxStore.shared.session(try #require(plain.pathComponents.dropLast().last))?.plan.tracks.first?.mode == .copy)
+    }
+
     @Test func aFileFFmpegCantReadFailsToOpen() async throws {
         let file = FileManager.default.temporaryDirectory.appending(path: "remux-\(UUID().uuidString).mkv")
         try (Data([0x1A, 0x45, 0xDF, 0xA3]) + Data(repeating: 0x55, count: 4096)).write(to: file)
         defer { try? FileManager.default.removeItem(at: file) }
         await #expect(throws: (any Error).self) { try await Remux.open(try Remux.fileSource(file)) }
+    }
+
+    // MARK: - HLS whose MPEG-TS segments carry HEVC (#292)
+
+    /// The HEVC MPEG-TS fixture served as HLS by `RangeServer` under names of its own. `edit` changes the playlist,
+    /// `segment` each segment's bytes.
+    private func hevcTransportStream(_ edit: (String) -> String = { $0 }, segment: (Int, Data) throws -> Data = { $1 }) throws -> URL {
+        let prefix = "hls-\(UUID().uuidString)"
+        var text = String(decoding: try Data(contentsOf: fixture("remux-hevc-ts.m3u8")), as: UTF8.self)
+        for index in 0..<2 {
+            _ = RangeServer.add("\(prefix)-\(index).ts", try segment(index, try Data(contentsOf: fixture("remux-hevc-ts-\(index).ts"))))
+            text = text.replacingOccurrences(of: "remux-hevc-ts-\(index).ts", with: "\(prefix)-\(index).ts")
+        }
+        return RangeServer.add("\(prefix).m3u8", Data(edit(text).utf8))
+    }
+
+    /// Plays `master` muted until AVPlayer shows its picture, or gives up after 10 s.
+    private func picture(_ master: URL) async -> (status: AVPlayerItem.Status, duration: Double, size: CGSize, video: Bool) {
+        let item = AVPlayerItem(url: master)
+        let player = AVPlayer(playerItem: item)
+        player.isMuted = true
+        player.play()
+        for _ in 0..<100 where (item.presentationSize == .zero || item.status == .unknown) && item.status != .failed { try? await Task.sleep(for: .milliseconds(100)) }
+        let result = (item.status, item.duration.seconds, item.presentationSize, item.tracks.contains { $0.assetTrack?.mediaType == .video })
+        player.replaceCurrentItem(with: nil)
+        return result
+    }
+
+    @Test func hlsSegmentsAreReadWithTheirKeysAndDiscontinuities() throws {
+        let base = URL(string: "https://cdn.test/v/index.m3u8")!
+        let text = """
+        #EXTM3U
+        #EXT-X-MEDIA-SEQUENCE:7
+        #EXT-X-DISCONTINUITY
+        #EXT-X-KEY:METHOD=AES-128,URI="key.bin"
+        #EXTINF:4.5,
+        a.png
+        #EXT-X-DISCONTINUITY
+        #EXT-X-KEY:METHOD=AES-128,URI="https://keys.test/k",IV=0x0000000000000000000000000000002A
+        #EXTINF:2,title
+        /b.ts?x=1
+        #EXT-X-KEY:METHOD=NONE
+        #EXTINF:1.25,
+        c.ts
+        #EXT-X-ENDLIST
+        """
+        let segments = try #require(HLSRemux.segments(text, base: base))
+        #expect(segments.map(\.url.absoluteString) == ["https://cdn.test/v/a.png", "https://cdn.test/b.ts?x=1", "https://cdn.test/v/c.ts"])
+        #expect(segments.map(\.duration) == [4.5, 2, 1.25])
+        #expect(segments.map(\.sequence) == [7, 8, 9])
+        // A discontinuity before the first segment begins nothing.
+        #expect(segments.map(\.discontinuity) == [false, true, false])
+        #expect(segments[0].key == .init(url: URL(string: "https://cdn.test/v/key.bin")!, iv: nil))
+        #expect(segments[1].key?.iv == Data(repeating: 0, count: 15) + Data([42]))
+        #expect(segments[2].key == nil)
+        #expect(HLSRemux.iv(258) == Data(repeating: 0, count: 14) + Data([1, 2]))
+        // Live, fragmented MP4 and SAMPLE-AES are left to AVPlayer.
+        #expect(HLSRemux.segments(text.replacingOccurrences(of: "#EXT-X-ENDLIST", with: ""), base: base) == nil)
+        #expect(HLSRemux.segments("#EXTM3U\n#EXT-X-MAP:URI=\"i.mp4\"\n#EXTINF:1,\na.m4s\n#EXT-X-ENDLIST", base: base) == nil)
+        #expect(HLSRemux.segments("#EXTM3U\n#EXT-X-KEY:METHOD=SAMPLE-AES,URI=\"k\"\n#EXTINF:1,\na.ts\n#EXT-X-ENDLIST", base: base) == nil)
+    }
+
+    @Test func hevcInTransportStreamHLSPlaysRepackaged() async throws {
+        let master = try await HLSRemux.open(try hevcTransportStream(), headers: [:], network: RangeServer.session)
+        defer { Remux.stop(master) }
+        #expect(Remux.isRemuxed(master))
+        let text = String(decoding: try await fetch(master), as: UTF8.self)
+        #expect(text.contains("CODECS=\"hvc1.") && text.contains(",mp4a.40.2\"") && text.contains("RESOLUTION=320x180") && text.contains("URI=\"1.m3u8\""))
+        let video = try await playlist(master, track: 0)
+        #expect(video.segments == ["0-0.m4s", "0-1.m4s"] && abs(video.seconds - 4) < 0.01)
+        let initialization = try await fetch(master.deletingLastPathComponent().appending(path: "0-0.mp4"))
+        #expect(initialization.subdata(in: 4..<8) == Data("ftyp".utf8) && RemuxPlan.box("hvcC", in: initialization) != nil)
+        for file in ["0-1.m4s", "1-0.m4s", "1-1.m4s"] {
+            let segment = try await fetch(master.deletingLastPathComponent().appending(path: file))
+            #expect(segment.count > 200 && segment.subdata(in: 4..<8) == Data("moof".utf8), "\(file)")
+        }
+        // Played as it is, AVPlayer plays this stream's sound alone; repackaged, it shows the picture.
+        let played = await picture(master)
+        #expect(played.status == .readyToPlay && abs(played.duration - 4) < 0.2)
+        #expect(played.size == CGSize(width: 320, height: 180) && played.video)
+    }
+
+    /// Segments disguised behind an image header, AES-128 encrypted (the IV from the media sequence), and an advert's
+    /// discontinuity, which gets its own initialization segment.
+    @Test func encryptedDisguisedSegmentsAcrossADiscontinuityPlay() async throws {
+        let key = Data((0..<16).map { UInt8($0 * 7) })
+        let keyURL = RangeServer.add("key-\(UUID().uuidString).bin", key)
+        let image = Data([137, 80, 78, 71, 13, 10, 26, 10]) + Data(repeating: 0, count: 60)
+        let url = try hevcTransportStream({ text in
+            var text = text.replacingOccurrences(of: "#EXT-X-MEDIA-SEQUENCE:0",
+                                                 with: "#EXT-X-MEDIA-SEQUENCE:5\n#EXT-X-KEY:METHOD=AES-128,URI=\"\(keyURL.absoluteString)\"")
+            if let last = text.range(of: "#EXTINF", options: .backwards) { text.insert(contentsOf: "#EXT-X-DISCONTINUITY\n", at: last.lowerBound) }
+            return text
+        }, segment: { index, data in try Self.encrypt(image + data, key: key, iv: HLSRemux.iv(5 + index)) })
+        let master = try await HLSRemux.open(url, headers: [:], network: RangeServer.session)
+        defer { Remux.stop(master) }
+        #expect(!String(decoding: try await fetch(master), as: UTF8.self).contains("CODECS"))
+        let text = String(decoding: try await fetch(master.deletingLastPathComponent().appending(path: "0.m3u8")), as: UTF8.self)
+        #expect(text.contains("#EXT-X-DISCONTINUITY\n#EXT-X-MAP:URI=\"0-1.mp4\"\n#EXTINF:2.000000,\n0-1.m4s"))
+        let later = try await fetch(master.deletingLastPathComponent().appending(path: "0-1.mp4"))
+        #expect(RemuxPlan.box("hvcC", in: later) != nil)
+        let played = await picture(master)
+        #expect(played.status == .readyToPlay && played.size == CGSize(width: 320, height: 180))
+    }
+
+    @Test func hlsWhosePictureAVPlayerShowsIsLeftAlone() async throws {
+        let name = "h264-\(UUID().uuidString)"
+        _ = RangeServer.add("\(name).ts", try Data(contentsOf: fixture("remux-h264.ts")))
+        let url = RangeServer.add("\(name).m3u8", Data("#EXTM3U\n#EXT-X-TARGETDURATION:1\n#EXTINF:0.2,\n\(name).ts\n#EXT-X-ENDLIST\n".utf8))
+        await #expect(throws: (any Error).self) { try await HLSRemux.open(url, headers: [:], network: RangeServer.session) }
+        // A live stream isn't repackaged either.
+        let live = RangeServer.add("live-\(name).m3u8", Data("#EXTM3U\n#EXT-X-TARGETDURATION:1\n#EXTINF:0.2,\n\(name).ts\n".utf8))
+        await #expect(throws: (any Error).self) { try await HLSRemux.open(live, headers: [:], network: RangeServer.session) }
+    }
+
+    private static func encrypt(_ data: Data, key: Data, iv: Data) throws -> Data {
+        var output = Data(count: data.count + kCCBlockSizeAES128)
+        var moved = 0
+        let capacity = output.count
+        let status = output.withUnsafeMutableBytes { out in
+            data.withUnsafeBytes { bytes in
+                key.withUnsafeBytes { key in
+                    iv.withUnsafeBytes { iv in
+                        CCCrypt(CCOperation(kCCEncrypt), CCAlgorithm(kCCAlgorithmAES), CCOptions(kCCOptionPKCS7Padding), key.baseAddress,
+                                kCCKeySizeAES128, iv.baseAddress, bytes.baseAddress, data.count, out.baseAddress, capacity, &moved)
+                    }
+                }
+            }
+        }
+        try #require(status == kCCSuccess)
+        return output.prefix(moved)
     }
 }

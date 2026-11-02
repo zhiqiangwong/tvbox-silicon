@@ -43,7 +43,7 @@ struct GlobalSearchView: View {
     /// Built-in sources can be selected while their first search is still in flight. One the viewer
     /// hid, or one paused for failing, isn't asked and gets no chip.
     private var sourceItems: [SearchSourceItem] {
-        let builtins = Site.builtInSites.filter { site in
+        let builtins = (store.subscription?.sites ?? Site.builtInSites).filter(\.isBuiltIn).filter { site in
             model.total > 0 && (model.results.contains { $0.site.key == site.key } ||
                 (model.busy && model.asking.contains(site.key)))
         }.map { site in
@@ -114,7 +114,6 @@ struct GlobalSearchView: View {
             #endif
         #endif
     } }
-
     /// The search field is the system's, so the bar below it waits for a search.
     private var showsHeader: Bool { !model.keyword.isEmpty }
 
@@ -138,7 +137,7 @@ struct GlobalSearchView: View {
                     if model.keyword.isEmpty { idle.frame(maxWidth: 760, alignment: .leading).frame(maxWidth: .infinity) }
                     else {
                         if model.total == 0 {
-                            AppContentUnavailableView(L10n.text("No searchable sources are available on this device."), systemImage: "magnifyingglass")
+                            EmptyResults(symbol: "magnifyingglass", title: L10n.text("No searchable sources are available on this device."))
                         } else if posters.isEmpty {
                             if model.busy {
                                 VStack(spacing: 18) {
@@ -168,7 +167,8 @@ struct GlobalSearchView: View {
                         }
                     }
                 } else {
-                    AppContentUnavailableView(L10n.text("No Sources Yet"), systemImage: "magnifyingglass", description: Text(L10n.text("Add a TVBox subscription in Settings.")))
+                    EmptyResults(symbol: "magnifyingglass", title: L10n.text("No Sources Yet"), message: L10n.text("Add a TVBox subscription in Settings."),
+                                 action: L10n.text("Settings"), actionSymbol: "gearshape") { store.section = .settings }
                 }
             }.pageContainer()
         }
@@ -328,7 +328,7 @@ struct GlobalSearchView: View {
     private func searchPoster(_ item: SearchPoster) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             PosterCard(video: item.video)
-            Text(SourceLabel(item.site.name).text).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            Text(SourceLabel(item.site.name).text).font(.caption).foregroundStyle(.secondary).lineLimit(1).cardCaption()
         }
     }
 
@@ -604,6 +604,8 @@ struct RecommendationsView: View {
     @Environment(\.openRoute) private var openRoute
     let config: Subscription
     var fixedSite: Site? = nil
+    /// Apple TV's Watch Now: the picks as a row of covers, then a row for each of the source's first categories.
+    var rails = false
     @AppStorage("recommendationSource") private var sourceKey = ""
     @State private var revision = 0
     @State private var forceRefresh = false
@@ -637,28 +639,30 @@ struct RecommendationsView: View {
             if let site {
                 if fixedSite == nil {
                 #if os(tvOS)
-                Button { choosingSource = true } label: {
-                    Label(site.name, systemImage: "chevron.down")
+                // The name opens the source, as on the Sources page; the switch beside it chooses another.
+                Button { openSite(site) } label: {
+                    Label(site.name, systemImage: "chevron.right")
                         .lineLimit(1)
                 }
                 .glassPill()
-                .accessibilityLabel(L10n.text("Recommendation Source"))
                 .contextMenu { sourceActions(site) }
+                .accessibilityIdentifier("recommendations.open")
+                Button {
+                    // The sheet only where nothing can be pushed.
+                    if openRoute != nil { pickSource(site) } else { choosingSource = true }
+                } label: {
+                    Image(systemName: "arrow.left.arrow.right")
+                }
+                .glassPill()
+                .accessibilityLabel(L10n.text("Recommendation Source"))
+                .accessibilityIdentifier("recommendations.switch")
                 .sheet(isPresented: $choosingSource, onDismiss: { afterPicker?(); afterPicker = nil }) {
                     NavigationStack {
                         ScrollViewReader { proxy in
                             ScrollView {
                                 LazyVStack(alignment: .leading, spacing: 4) {
                                     ForEach(sites) { candidate in
-                                        Button {
-                                            // Leaving this source drops its open category before the new home loads.
-                                            category = nil
-                                            categoryPage = 1
-                                            sourceKey = candidate.key
-                                            revision = 0
-                                            forceRefresh = false
-                                            choosingSource = false
-                                        } label: {
+                                        Button { choose(candidate); choosingSource = false } label: {
                                             HStack {
                                                 Text(candidate.name).lineLimit(1)
                                                 Spacer()
@@ -696,7 +700,6 @@ struct RecommendationsView: View {
                 #else
                 Button { forceRefresh = true; revision += 1 } label: {
                     ZStack {
-                        Circle().fill(Color.primary.opacity(0.06))
                         if model.busy {
                             ProgressView().controlSize(.small)
                         } else {
@@ -706,6 +709,8 @@ struct RecommendationsView: View {
                         }
                     }
                     .frame(width: SourceStrip.controlSize, height: SourceStrip.controlSize)
+                    // Liquid Glass where the system draws it, as the source and switch buttons beside it.
+                    .glassOrFill(.regular.interactive(), Color.primary.opacity(0.06), in: Circle())
                     .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
@@ -717,12 +722,88 @@ struct RecommendationsView: View {
         }
     }
 
-    var body: some View { AppPerceptionTracking {
+    /// Opens the Sources page to choose the source from, as on every platform; choosing comes back here.
+    private func pickSource(_ current: Site) {
+        let sites = sites, key = current.key
+        openRoute?(Route { AnyView(SitesView(pick: { choose($0) }, pickable: sites, picked: key)) })
+    }
+
+    #if !os(tvOS)
+    /// The chosen source as a capsule that opens it, and a switch beside it that opens the Sources page to choose another.
+    private func sourcePickerButton(_ site: Site) -> some View {
+        HStack(spacing: 8) {
+            sourceNameButton(site)
+            Button { pickSource(site) } label: {
+                Image(systemName: "arrow.left.arrow.right").font(.subheadline.weight(.semibold))
+                    .frame(width: SourceStrip.controlSize, height: SourceStrip.controlSize)
+                    .glassOrFill(.regular.interactive(), Color.primary.opacity(0.06), in: Circle())
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(L10n.text("Recommendation Source"))
+            .accessibilityIdentifier("recommendations.switch")
+            #if os(macOS)
+            .help(L10n.text("Recommendation Source"))
+            #endif
+        }
+    }
+
+    private func sourceNameButton(_ site: Site) -> some View {
+        Button { openSite(site) } label: {
+            HStack(spacing: 6) {
+                Text(site.name).lineLimit(1)
+                Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            }
+            .font(.subheadline.weight(.semibold))
+            .padding(.horizontal, 14).frame(height: SourceStrip.controlSize)
+            .glassOrFill(.regular.interactive(), Color.primary.opacity(0.06), in: Capsule())
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .contextMenu { sourceActions(site) }
+        .accessibilityIdentifier("recommendations.open")
+    }
+    #endif
+
+    /// The source's own page, as choosing it on the Sources page opens.
+    private func openSite(_ site: Site) {
+        let route = sitePage(site)
+        if let openRoute { openRoute(route) } else { openedSource = route }
+    }
+
+    /// The source's page, opening on the picks already shown here; it refreshes them and swaps in a different answer.
+    private func sitePage(_ site: Site) -> Route {
+        let config = config
+        var preview: (videos: [Video], categories: [TVCore.Category])?
+        if model.site?.key == site.key, !model.busy {
+            let videos = model.items.compactMap { item -> Video? in if case .detail(let video) = item.destination { video } else { nil } }
+            if !videos.isEmpty, videos.count == model.items.count { preview = (videos, model.categories) }
+        }
+        return Route { AnyView(SiteView(site: site, origin: config.origin, jarURL: config.spiderURL, preview: preview)) }
+    }
+
+    /// Leaving this source drops its open category before the new home loads.
+    private func choose(_ candidate: Site) {
+        category = nil
+        categoryPage = 1
+        sourceKey = candidate.key
+        revision = 0
+        forceRefresh = false
+    }
+
+    /// The source's picks in a grid, under its categories as chips.
+    private var grid: some View { AppPerceptionTracking {
         VStack(alignment: .leading, spacing: 16) {
             #if os(tvOS)
             recommendationControls.tvFocusSection()
             #else
-            if fixedSite == nil, let site, sites.count > 1 {
+            if fixedSite == nil, let site, sites.count > 1, openRoute != nil {
+                HStack(spacing: 10) {
+                    sourcePickerButton(site)
+                    Spacer(minLength: 0)
+                    recommendationControls.fixedSize()
+                }
+            } else if fixedSite == nil, let site, sites.count > 1 {
                 HStack(spacing: 10) {
                     SourceStrip(items: sites.map { .init(id: $0.key, name: $0.name) }, selection: site.key) { key in
                         // Clear before the key changes. The load task opens a category-only home after it returns;
@@ -780,6 +861,16 @@ struct RecommendationsView: View {
                 .tvFocusSection()
             }
         }
+    } }
+
+    var body: some View { AppPerceptionTracking {
+        Group {
+            #if os(tvOS)
+            if rails { tvRails } else { grid }
+            #else
+            if rails { phoneRails } else { grid }
+            #endif
+        }
         .task(id: requestID) {
             #if DEBUG && os(tvOS)
             // `-qaSourcePicker 1` opens the recommendation source picker, for screenshots.
@@ -799,7 +890,8 @@ struct RecommendationsView: View {
             }
         }
         .task(id: "\(requestID)|\(category ?? "")|\(categoryPage)") {
-            guard let category, let loadedSite = model.site, loadedSite.key == site?.key else { return }
+            // The rows load their own categories.
+            guard !rails, let category, let loadedSite = model.site, loadedSite.key == site?.key else { return }
             await browser.load(.list(category: category, query: "", page: categoryPage),
                                client: CatalogClient(site: loadedSite, origin: config.origin, jarURL: config.spiderURL))
         }
@@ -812,6 +904,127 @@ struct RecommendationsView: View {
             #endif
         }
     } }
+
+    #if os(tvOS)
+    /// The picks as a row of covers, then a row for each of the source's first four categories, each loaded when it
+    /// comes on screen. See All opens the source's page.
+    private var tvRails: some View {
+        LazyVStack(alignment: .leading, spacing: 30) {
+            HStack(spacing: 24) {
+                Text(L10n.text("Recommendations")).font(.system(size: DiscoverLayout.heading, weight: .semibold)).lineLimit(1)
+                recommendationControls
+            }
+            .padding(.horizontal, DiscoverLayout.gutter)
+            .tvFocusSection()
+            // Every category row starts loading with the heading, not when it scrolls on screen: a row that filled in
+            // under the remote moved the page.
+            .task(id: "\(model.site?.key ?? "")|" + model.categories.prefix(4).map(\.id).joined(separator: ",")) {
+                guard let loadedSite = model.site else { return }
+                let client = CatalogClient(site: loadedSite, origin: config.origin, jarURL: config.spiderURL)
+                for item in model.categories.prefix(4) { WatchNowRows.shared.load(category: item.id, client: client) }
+            }
+            if let error = model.error {
+                HStack(spacing: 24) {
+                    Text(error).foregroundStyle(.secondary)
+                    Button(L10n.text("Retry")) { forceRefresh = true; revision += 1 }.controlButton()
+                }
+                .padding(.horizontal, DiscoverLayout.gutter)
+            }
+            if let loadedSite = model.site, !model.busy || !model.items.isEmpty {
+                let client = CatalogClient(site: loadedSite, origin: config.origin, jarURL: config.spiderURL)
+                let page = sitePage(loadedSite)
+                if !model.items.isEmpty {
+                    WatchNowTVRow(seeAll: WatchNowTVSeeAll(height: WatchNowTVCover.height, route: page)) {
+                            ForEach(model.items) { item in
+                                let cover = WatchNowTVCover(title: item.name, detail: item.remarks, poster: item.poster?.url, headers: item.poster?.headers ?? [:])
+                                switch item.destination {
+                                case .search(let keyword):
+                                    Button { store.searchVideos(keyword) } label: { cover }.cardButton()
+                                case .detail(let video):
+                                    RouteLink { CatalogDestination(video: video, client: client) } label: { cover }.cardButton()
+                                }
+                            }
+                    }
+                } else if !model.busy, model.error == nil, model.categories.isEmpty {
+                    Text(L10n.text("This source has no recommendations. Choose another source or use Global Search."))
+                        .foregroundStyle(.secondary).padding(.horizontal, DiscoverLayout.gutter)
+                }
+                ForEach(model.categories.prefix(4)) { item in
+                    WatchNowTVCategoryRail(title: item.name, category: item.id, client: client, seeAll: page)
+                }
+
+            } else if model.busy {
+                HStack(spacing: DiscoverLayout.spacing) {
+                    ForEach(0..<7, id: \.self) { _ in
+                        SkeletonBlock(cornerRadius: 12).frame(width: WatchNowTVCover.width, height: WatchNowTVCover.height)
+                            .frame(height: WatchNowTVCover.height + DiscoverLayout.captionHeight, alignment: .top)
+                    }
+                }
+                .padding(.horizontal, DiscoverLayout.gutter).padding(.vertical, 24)
+                .accessibilityLabel(L10n.text("Loading…"))
+            }
+        }
+    }
+    #endif
+
+    #if !os(tvOS)
+    /// Watch Now on iPhone and the Mac: the picks as a row of covers under the source, then a row for each of its first four
+    /// categories, as on Apple TV. A category's heading opens the source's page.
+    private var phoneRails: some View {
+        VStack(alignment: .leading, spacing: 30) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    Text(L10n.text("Recommendations")).font(.system(size: DiscoverLayout.heading, weight: .semibold)).lineLimit(1)
+                    Spacer(minLength: 8)
+                    recommendationControls.fixedSize()
+                }
+                if fixedSite == nil, let site, sites.count > 1, openRoute != nil {
+                    sourcePickerButton(site)
+                }
+            }
+            .padding(.horizontal, DiscoverLayout.gutter)
+            // Every category row starts loading with the heading, not when it scrolls on screen.
+            .task(id: "\(model.site?.key ?? "")|" + model.categories.prefix(4).map(\.id).joined(separator: ",")) {
+                guard let loadedSite = model.site else { return }
+                let client = CatalogClient(site: loadedSite, origin: config.origin, jarURL: config.spiderURL)
+                for item in model.categories.prefix(4) { WatchNowRows.shared.load(category: item.id, client: client) }
+            }
+            if let error = model.error {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(error).font(.subheadline).foregroundStyle(.secondary)
+                    Button(L10n.text("Retry")) { forceRefresh = true; revision += 1 }.controlButton()
+                }
+                .padding(.horizontal, DiscoverLayout.gutter)
+            }
+            if let loadedSite = model.site, !model.busy || !model.items.isEmpty {
+                let client = CatalogClient(site: loadedSite, origin: config.origin, jarURL: config.spiderURL)
+                let page = sitePage(loadedSite)
+                if !model.items.isEmpty {
+                    WatchNowPhoneRow {
+                        ForEach(model.items) { item in
+                            let cover = WatchNowPhoneCover(title: item.name, detail: item.remarks, poster: item.poster?.url, headers: item.poster?.headers ?? [:])
+                            switch item.destination {
+                            case .search(let keyword):
+                                Button { store.searchVideos(keyword) } label: { cover }.tmdbCardButton()
+                            case .detail(let video):
+                                RouteLink { CatalogDestination(video: video, client: client) } label: { cover }.tmdbCardButton()
+                            }
+                        }
+                    }
+                    .padding(.top, -16)
+                } else if !model.busy, model.error == nil, model.categories.isEmpty {
+                    Text(L10n.text("This source has no recommendations. Choose another source or use Global Search."))
+                        .font(.subheadline).foregroundStyle(.secondary).padding(.horizontal, DiscoverLayout.gutter)
+                }
+                ForEach(model.categories.prefix(4)) { item in
+                    WatchNowPhoneCategoryRail(title: item.name, category: item.id, client: client, seeAll: page)
+                }
+            } else if model.busy {
+                WatchNowPhoneSkeletonRow().padding(.top, -16)
+            }
+        }
+    }
+    #endif
 
     /// A long press on a source (a right click on Mac): hide it, open its page to search only that source, as the
     /// Sources page does, or go to the Sources page to manage them all. `leave` runs the two that leave Watch Now;
@@ -1010,7 +1223,6 @@ struct ScrollStrip<Content: View>: View {
             }
         }
     } }
-
     private func update(_ metrics: Metrics) {
         tracking.metrics = metrics
         let next = Edges(leading: metrics.offset > 1, trailing: metrics.offset < metrics.maximum - 1)
@@ -1103,6 +1315,7 @@ private struct SourceChip: View {
     let action: () -> Void
     @State private var hovering = false
     @Environment(\.stripDrag) private var drag
+    @Environment(\.glassControls) private var glass
 
     var body: some View { AppPerceptionTracking {
         let label = SourceLabel(name)
@@ -1118,7 +1331,7 @@ private struct SourceChip: View {
             .foregroundStyle(selected ? Brand.onAccent : Color.primary.opacity(0.82))
             .padding(.horizontal, 12)
             .frame(height: SourceStrip.controlSize)
-            .background(fill, in: Capsule())
+            .glassOrFill(glass ? (selected ? GlassStyle.regular.tint(Brand.accent).interactive() : .regular.interactive()) : nil, fill, in: Capsule())
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -1129,7 +1342,6 @@ private struct SourceChip: View {
         .accessibilityAddTraits(selected ? [.isSelected] : [])
         .help(name)
     } }
-
     private var fill: Color {
         if selected { return Brand.accent }
         return Color.primary.opacity(hovering ? 0.12 : 0.06)

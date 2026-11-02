@@ -47,6 +47,7 @@ struct MobilePlayerView: View {
     @State private var boost: SpeedBoost?
     @State private var holding = false
     @AppStorage(SpeedBoost.key) private var holdSpeed = SpeedBoost.standard
+    @AppStorage(PlaybackInfo.key) private var showsPlaybackInfo = false
     /// Double taps on a side skip (YouTube); the run's total shows on that side for a moment.
     @State private var taps = PictureTaps()
     @State private var skipped: (forward: Bool, total: Double)?
@@ -113,6 +114,14 @@ struct MobilePlayerView: View {
                     if session.paused { session.togglePlayback() }
                 }
             }
+            // The controls take its corner while they show; it comes back with the bare picture.
+            if showsPlaybackInfo && session.error == nil && session.showsPicture && !pip.active && playingOn == nil {
+                PlaybackInfoPanel(session: session)
+                    .padding(inline ? 8 : 16)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .opacity(chromeVisible ? 0 : 1)
+                    .animation(.smooth(duration: 0.25), value: chromeVisible)
+            }
             controls.opacity(chromeVisible ? 1 : 0).allowsHitTesting(chromeVisible && !settling)
         }
         .animation(.easeInOut(duration: 0.7), value: waiting == nil)
@@ -148,7 +157,6 @@ struct MobilePlayerView: View {
             }
         }
     } }
-
     /// What the Lock Screen's Now Playing shows, besides the position the system runs on from the rate.
     private struct NowPlayingState: Equatable {
         var title: String
@@ -567,6 +575,7 @@ struct MobilePlayerView: View {
                 }
             }
             Toggle(L10n.text("Fill Screen"), isOn: $fillsScreen)
+            Toggle(L10n.text("Show Video Info"), isOn: $showsPlaybackInfo)
         } label: {
             Image(systemName: "slider.horizontal.3").font(.headline).frame(width: 22, height: 22)
                 .symbolVariant(pictureSwitches && (upscalesVideo || smoothsVideo) ? .fill : .none)
@@ -679,12 +688,15 @@ struct MobilePlayerView: View {
 }
 
 /// The top of an iPhone watch page before the picture: the cover filling the width, blurred, under a spinner.
+/// While nothing is starting, the whole cover shows clear over that blur.
 struct WatchCoverBackdrop: View {
     let poster: URL?
     var headers: [String: String] = [:]
     var loading = true
+    var clear = false
     /// What the wait has to say, by how long it has run (see `WaitSpinner`).
     var status: (@MainActor (TimeInterval) -> PlaybackWait)? = nil
+    @State private var aspect: CGFloat?
     var body: some View { AppPerceptionTracking {
         ZStack {
             Color.black
@@ -693,8 +705,18 @@ struct WatchCoverBackdrop: View {
                 .blur(radius: 24).scaleEffect(1.2)
                 .overlay(Color.black.opacity(0.35))
                 .accessibilityHidden(true)
+            if clear, poster != nil {
+                PosterImage(url: poster, headers: headers, aspect: $aspect)
+                    .aspectRatio(aspect ?? 2.0 / 3, contentMode: .fit)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .shadow(color: .black.opacity(0.4), radius: 12, y: 4)
+                    .padding(.vertical, 14)
+                    .accessibilityHidden(true)
+                    .transition(.opacity)
+            }
             if loading { WaitSpinner(status: status) }
         }
+        .animation(.easeOut(duration: 0.3), value: clear)
         .clipped()
     } }
 }
@@ -804,7 +826,6 @@ private struct SeekBar<Accessory: View>: View {
         .animation(.easeOut(duration: 0.15), value: drag == nil)
         .selectionHaptic(trigger: fineness)
     } }
-
     private func bar(_ position: Double) -> some View {
         let duration = clock.duration
         let value = min(max(0, position), duration)

@@ -2,6 +2,7 @@
 import { image, type MediaType, type TMDB, yearOf } from "./tmdb.ts";
 
 export interface Person {
+  id: number | null;
   name: string;
   role: string | null;
   profile: string | null;
@@ -46,6 +47,7 @@ export interface Details {
   year: number | null;
   date: string | null;
   genres: string[];
+  genreItems: { id: number; name: string }[];
   runtime: number | null;
   rating: number | null;
   voteCount: number;
@@ -54,6 +56,10 @@ export interface Details {
   poster: string | null;
   backdrop: string | null;
   logo: string | null;
+  heroPoster: string | null;
+  trailer: { site: "YouTube" | "IMDb"; key: string } | null;
+  stills: string[];
+  studios: { id: number | null; kind: "network" | "company"; name: string; logo: string | null }[];
   cast: Person[];
   crew: Person[];
   networks: string[];
@@ -124,12 +130,33 @@ function logo(images: any, language: string) {
   return image(pick?.file_path, "w500");
 }
 
+// A separate wordmark sits over the home cover. Prefer a text-free portrait so the title
+// isn't printed twice; ordinary catalog cards keep TMDB's localized poster.
+export function heroPoster(images: any, fallback: unknown): string | null {
+  const posters = list(images?.posters).filter((entry) => entry.iso_639_1 == null &&
+    typeof entry.file_path === "string" && typeof entry.aspect_ratio === "number" &&
+    entry.aspect_ratio >= 0.5 && entry.aspect_ratio <= 0.85);
+  posters.sort((a, b) => (b.vote_count ?? 0) - (a.vote_count ?? 0) || (b.width ?? 0) - (a.width ?? 0));
+  return image(posters[0]?.file_path ?? fallback, "w780");
+}
+
+export function trailer(videos: any, language: string, imdbID?: unknown): Details["trailer"] {
+  if (typeof imdbID === "string" && /^tt\d{5,12}$/.test(imdbID)) return { site: "IMDb", key: imdbID };
+  const lang = language.split("-")[0];
+  const candidates = list(videos?.results).filter((entry) => entry.site === "YouTube" &&
+    typeof entry.key === "string" && /^[A-Za-z0-9_-]{11}$/.test(entry.key) && ["Trailer", "Teaser"].includes(entry.type));
+  const score = (entry: any) => (entry.official ? 8 : 0) + (entry.type === "Trailer" ? 4 : 0) + (entry.iso_639_1 === lang ? 2 : 0);
+  candidates.sort((a, b) => score(b) - score(a) || String(b.published_at ?? "").localeCompare(String(a.published_at ?? "")));
+  return candidates[0] ? { site: "YouTube", key: candidates[0].key } : null;
+}
+
 export async function details(tmdb: TMDB, type: MediaType, id: number, language: string, seasonNumber: number | null): Promise<Details | null> {
   const lang = language.split("-")[0];
   const item = await tmdb.get(`/${type}/${id}`, {
     language,
-    append_to_response: type === "tv" ? "aggregate_credits,images,translations,recommendations,similar" : "credits,images,translations,recommendations,similar",
+    append_to_response: type === "tv" ? "aggregate_credits,images,translations,recommendations,similar,videos,external_ids" : "credits,images,translations,recommendations,similar,videos",
     include_image_language: `${lang},en,null`,
+    include_video_language: `${lang},en,null`,
   });
   if (!item) return null;
   const tv = type === "tv";
@@ -137,16 +164,17 @@ export async function details(tmdb: TMDB, type: MediaType, id: number, language:
   const cast: Person[] = list(credits?.cast)
     .slice(0, 16)
     .map((person) => ({
+      id: Number.isSafeInteger(person.id) && person.id > 0 ? person.id : null,
       name: clip(person.name, 80),
       role: clip(tv ? person.roles?.[0]?.character : person.character, 80) || null,
       profile: image(person.profile_path, "w185"),
     }));
   const crew: Person[] = tv
-    ? list(item.created_by).slice(0, 4).map((person) => ({ name: clip(person.name, 80), role: "Creator", profile: image(person.profile_path, "w185") }))
+    ? list(item.created_by).slice(0, 4).map((person) => ({ id: Number.isSafeInteger(person.id) && person.id > 0 ? person.id : null, name: clip(person.name, 80), role: "Creator", profile: image(person.profile_path, "w185") }))
     : list(credits?.crew)
         .filter((person) => person.job === "Director")
         .slice(0, 3)
-        .map((person) => ({ name: clip(person.name, 80), role: "Director", profile: image(person.profile_path, "w185") }));
+        .map((person) => ({ id: Number.isSafeInteger(person.id) && person.id > 0 ? person.id : null, name: clip(person.name, 80), role: "Director", profile: image(person.profile_path, "w185") }));
   const seasons: SeasonSummary[] = list(item.seasons).map((season) => ({
     number: season.season_number,
     name: clip(season.name, 80),
@@ -187,6 +215,7 @@ export async function details(tmdb: TMDB, type: MediaType, id: number, language:
     year: yearOf(date),
     date,
     genres: list(item.genres).map((genre) => clip(genre.name, 40)).filter(Boolean),
+    genreItems: list(item.genres).filter((genre) => Number.isSafeInteger(genre.id) && genre.id > 0 && clip(genre.name, 40)).map((genre) => ({ id: genre.id, name: clip(genre.name, 40) })),
     runtime: tv ? number(item.episode_run_time?.[0]) : number(item.runtime),
     rating: item.vote_count > 0 ? number(item.vote_average) : null,
     voteCount: item.vote_count ?? 0,
@@ -195,6 +224,10 @@ export async function details(tmdb: TMDB, type: MediaType, id: number, language:
     poster: image(item.poster_path, "w500"),
     backdrop: image(item.backdrop_path, "w1280"),
     logo: logo(item.images, language),
+    heroPoster: heroPoster(item.images, item.poster_path),
+    trailer: trailer(item.videos, language, item.imdb_id ?? item.external_ids?.imdb_id),
+    stills: [...new Set(list(item.images?.backdrops).filter((entry) => typeof entry.file_path === "string" && entry.aspect_ratio > 1).map((entry) => image(entry.file_path, "w780")!))].slice(0, 8),
+    studios: list(tv ? item.networks : item.production_companies).slice(0, 8).map((entry) => ({ id: Number.isSafeInteger(entry.id) && entry.id > 0 ? entry.id : null, kind: tv ? "network" : "company", name: clip(entry.name, 60), logo: image(entry.logo_path, "w300") })),
     cast,
     crew,
     networks: list(tv ? item.networks : item.production_companies).slice(0, 3).map((entry) => clip(entry.name, 60)),

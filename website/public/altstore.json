@@ -19,6 +19,36 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "1.8.6",
+          "buildVersion": "44",
+          "date": "2026-11-02",
+          "localizedDescription": "• 全新的“现在观看”\n• 更多 4K 视频有画面了\n• 预告片全屏播放\n• CatPawOpen 源可用百度网盘登录\n• 其他修复\n\n• A new Watch Now\n• Picture for more 4K videos\n• Trailers play full screen\n• Baidu Netdisk sign-in for CatPawOpen\n• Other fixes",
+          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.6/Yingxia-1.8.6-ios.ipa",
+          "size": 117329114,
+          "sha256": "199d9dd2b049d84fe59f5a359322410c687d3818cf18a941920be8dafd5ffede",
+          "minOSVersion": "17.0"
+        },
+        {
+          "version": "1.8.5",
+          "buildVersion": "43",
+          "date": "2026-11-01",
+          "localizedDescription": "• 官方弹弹play弹幕\n• 更多网盘视频可以播放\n• 显示视频信息\n• 反馈可附图片和视频\n• JAR 源打开更快\n• 其他修复\n\n• Official Dandanplay danmaku\n• More videos from cloud drives play\n• Show Video Info\n• Pictures and videos in feedback\n• JAR sources open faster\n• Other fixes",
+          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.5/Yingxia-1.8.5-ios.ipa",
+          "size": 117006225,
+          "sha256": "2757f3c59c7a3aeab5b120580fee956e88fcd2c59bc21e4a7c0fda3dc6c3bd45",
+          "minOSVersion": "17.0"
+        },
+        {
+          "version": "1.8.4",
+          "buildVersion": "42",
+          "date": "2026-10-31",
+          "localizedDescription": "• 发现\n• 你的 NAS 和媒体服务器\n• 弹幕区域可调\n• 其他修复\n\n• Discover\n• Your NAS and media server\n• Choose where danmaku go\n• Other fixes",
+          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.4/Yingxia-1.8.4-ios.ipa",
+          "size": 116425308,
+          "sha256": "133309eeb1827acbc2b5ac1b5567838185d9c460921794927b1e7022ecbfcea3",
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.8.3",
           "buildVersion": "41",
           "date": "2026-10-29",
@@ -36,36 +66,6 @@
           "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.2/Yingxia-1.8.2-ios.ipa",
           "size": 115095547,
           "sha256": "83eee78a59458b9361c6b1fdef9284e0615ccc8a9b2fc9a3ad843d9911ce8a09",
-          "minOSVersion": "17.0"
-        },
-        {
-          "version": "1.8.1",
-          "buildVersion": "39",
-          "date": "2026-10-28",
-          "localizedDescription": "• 来自 TMDB 的海报、演员和剧照\n• 在影片页直接观看\n• 网盘字幕\n• 新增两个短剧源\n• 其他修复\n\n• Artwork, cast and episode pictures from TMDB\n• Watch on the video's page\n• Subtitles from cloud drives\n• Two more short-drama sources\n• Other fixes",
-          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.1/Yingxia-1.8.1-ios.ipa",
-          "size": 99244426,
-          "sha256": "4830fa6ed2af943efbe36ed5931c95316e999e0f27e9c224a1e08ec1271e2bfc",
-          "minOSVersion": "17.0"
-        },
-        {
-          "version": "1.8.0",
-          "buildVersion": "36",
-          "date": "2026-10-26",
-          "localizedDescription": "• 支持 MKV 等更多格式\n• HDR 视频可以播放\n• Python 点播源全平台可用\n• 点播源不再消失\n• 红果短剧更稳定\n• 选集按钮不再误触\n• 更舒展的影片页面\n• 加入 Telegram 群组\n• 批量移除订阅\n• 其他修复\n\n• Plays MKV and more\n• HDR videos play\n• Python sources everywhere\n• Sources no longer disappear\n• Hongguo loads more reliably\n• Episode buttons out of the way\n• A roomier video page\n• Join the Telegram group\n• Remove subscriptions in bulk\n• Other fixes",
-          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.0/Yingxia-1.8.0-ios.ipa",
-          "size": 98643054,
-          "sha256": "cedfa1b766e90560292125d5b384879f180caa9a6ccb890f73fa86b8b2a00f9c",
-          "minOSVersion": "17.0"
-        },
-        {
-          "version": "1.7.13",
-          "buildVersion": "32",
-          "date": "2026-10-25",
-          "localizedDescription": "• 支持 iOS 17\n• 更多网页播放地址可以播放\n• 全局搜索更简洁\n• 为订阅命名\n• 只显示图标的标签栏\n• 海报不再丢失\n• 弹幕更稳定\n• 播放和暂停反应更快\n• 返回时不再卡死\n• 其他修复\n\n• Runs on iOS 17\n• More player pages play\n• A tidier Global Search\n• Name your subscriptions\n• Icons-only tab bar\n• Posters stay put\n• Danmaku keep coming\n• Snappier play and pause\n• No more freeze on return\n• Other fixes",
-          "downloadURL": "https://download.getmegaportal.com/yingxia/1.7.13/Yingxia-1.7.13-ios.ipa",
-          "size": 72586889,
-          "sha256": "ecc26bb93204af75dfebe83032af28bddde05eba5bec272b9770dc67b769e920",
           "minOSVersion": "17.0"
         }
       ],

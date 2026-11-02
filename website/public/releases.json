@@ -1,6 +1,290 @@
 {
   "releases": [
     {
+      "version": "1.8.6",
+      "build": 44,
+      "date": "2026-11-02",
+      "links": {
+        "macos": "https://download.getmegaportal.com/yingxia/1.8.6/Yingxia-1.8.6-macos-arm64.dmg",
+        "macos-x86_64": "https://download.getmegaportal.com/yingxia/1.8.6/Yingxia-1.8.6-macos-x86_64.dmg",
+        "ios": "https://yingxia.getmegaportal.com/#install-ios",
+        "tvos": "https://yingxia.getmegaportal.com/#install-tv"
+      },
+      "features": [
+        {
+          "symbol": "play.rectangle.on.rectangle",
+          "title": {
+            "en": "A new Watch Now",
+            "zh-Hans": "全新的“现在观看”",
+            "zh-Hant": "全新的「立即觀看」",
+            "ja": "新しい「今すぐ観る」"
+          },
+          "detail": {
+            "en": "Watch Now now looks like Discover. What you're in the middle of fills the top of the page over its artwork, and Continue Watching, Favorites and Recommendations are rows of covers. Each row's title opens all of it with See All.",
+            "zh-Hans": "“现在观看”现在和“发现”一样：你正在看的内容以大图铺满页面顶部，“继续观看”、“收藏”和“推荐”都是一排排海报。点每一排的标题可以“查看全部”。",
+            "zh-Hant": "「立即觀看」現在和「探索」一樣：你正在看的內容以大圖鋪滿頁面頂部，「繼續觀看」、「收藏」和「推薦」都是一排排海報。點每一排的標題可以「查看全部」。",
+            "ja": "「今すぐ観る」が「見つける」と同じデザインになりました。見ている途中の作品がアートワークとともにページ上部に大きく表示され、「視聴を続ける」「お気に入り」「おすすめ」はポスターの列になります。各列のタイトルから「すべて表示」できます。"
+          },
+          "platforms": [
+            "macos",
+            "ios",
+            "tvos"
+          ]
+        },
+        {
+          "symbol": "photo.tv",
+          "title": {
+            "en": "Picture for more 4K videos",
+            "zh-Hans": "更多 4K 视频有画面了",
+            "zh-Hant": "更多 4K 影片有畫面了",
+            "ja": "4K 動画の映像が出るように"
+          },
+          "detail": {
+            "en": "Some sources send 4K HEVC video in a format Apple's player plays with sound only. The app now repackages these streams as they play, so the picture shows too.",
+            "zh-Hans": "有些片源用苹果播放器只能播出声音的格式发送 4K HEVC 视频。现在应用会在播放时重新封装这些视频流，画面也能正常显示。",
+            "zh-Hant": "有些片源用蘋果播放器只能播出聲音的格式傳送 4K HEVC 影片。現在 App 會在播放時重新封裝這些影片串流，畫面也能正常顯示。",
+            "ja": "一部のソースは、Apple のプレーヤーでは音声しか再生されない形式で 4K HEVC 動画を送ってきます。再生中にアプリがこれを変換し直すので、映像も表示されるようになりました。"
+          }
+        },
+        {
+          "symbol": "film",
+          "title": {
+            "en": "Trailers play full screen",
+            "zh-Hans": "预告片全屏播放",
+            "zh-Hant": "預告片全螢幕播放",
+            "ja": "予告編を全画面で再生"
+          },
+          "detail": {
+            "en": "On iPhone and iPad, Discover's trailers open in the movie player, with full screen, zoom and playback speed, instead of a small window.",
+            "zh-Hans": "在 iPhone 和 iPad 上，“发现”里的预告片现在用影片播放器打开，可以全屏、缩放和调整播放速度，不再是一个小窗口。",
+            "zh-Hant": "在 iPhone 和 iPad 上，「探索」裡的預告片現在用影片播放器開啟，可以全螢幕、縮放和調整播放速度，不再是一個小視窗。",
+            "ja": "iPhone と iPad では、「見つける」の予告編が小さなウインドウではなく動画プレーヤーで開き、全画面・ズーム・再生速度が使えます。"
+          },
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "symbol": "person.badge.key",
+          "title": {
+            "en": "Baidu Netdisk sign-in for CatPawOpen",
+            "zh-Hans": "CatPawOpen 源可用百度网盘登录",
+            "zh-Hant": "CatPawOpen 來源可用百度網盤登入",
+            "ja": "CatPawOpen で Baidu Netdisk にサインイン"
+          },
+          "detail": {
+            "en": "When a CatPawOpen source says it needs a Baidu Netdisk sign-in, the app now offers its own Baidu sign-in right there, instead of the source's config page that couldn't be opened from another phone.",
+            "zh-Hans": "CatPawOpen 源提示需要登录百度网盘时，应用现在会直接提供自己的百度登录，不用再去那个无法用另一台手机打开的源配置页面。",
+            "zh-Hant": "CatPawOpen 來源提示需要登入百度網盤時，App 現在會直接提供自己的百度登入，不用再去那個無法用另一支手機開啟的來源設定頁面。",
+            "ja": "CatPawOpen のソースが Baidu Netdisk へのサインインを求めたとき、アプリ自身の Baidu サインインをその場で表示するようになりました。別のスマートフォンから開けないソースの設定ページは不要です。"
+          },
+          "platforms": [
+            "macos",
+            "ios"
+          ]
+        },
+        {
+          "symbol": "wrench.and.screwdriver",
+          "title": {
+            "en": "Other fixes",
+            "zh-Hans": "其他修复",
+            "zh-Hant": "其他修正",
+            "ja": "その他の修正"
+          },
+          "detail": {
+            "en": "On Apple TV, the Downloads page reaches your downloaded episodes while others are still downloading. On Apple TV with tvOS 18, Add Subscription keeps the address you typed. Danmaku keep coming when Dandanplay's daily limit is reached. On iPhone, the watch page shows whole episode names and marks the episode playing clearly. Fixed a crash on iPhone while a video loads, and one on iPads with iOS 17 when opening a section from More.",
+            "zh-Hans": "在 Apple TV 上，有内容正在下载时也能进入“下载”页面的已下载剧集。在 tvOS 18 的 Apple TV 上，“添加订阅”会保留你输入的地址。弹弹play达到每日上限时，弹幕也能继续显示。在 iPhone 上，播放页会显示完整的剧集名称，并清楚标出正在播放的一集。修复了 iPhone 在视频加载时的一个闪退，以及 iOS 17 的 iPad 从“更多”打开页面时的闪退。",
+            "zh-Hant": "在 Apple TV 上，有內容正在下載時也能進入「下載」頁面的已下載集數。在 tvOS 18 的 Apple TV 上，「新增訂閱」會保留你輸入的網址。彈彈play達到每日上限時，彈幕也能繼續顯示。在 iPhone 上，播放頁會顯示完整的集數名稱，並清楚標出正在播放的一集。修正了 iPhone 在影片載入時的一個閃退，以及 iOS 17 的 iPad 從「更多」開啟頁面時的閃退。",
+            "ja": "Apple TV で、ほかのダウンロード中でも「ダウンロード」ページのダウンロード済みエピソードに移動できるようになりました。tvOS 18 の Apple TV で「配信設定を追加」に入力したアドレスが消えなくなりました。dandanplay の 1 日の上限に達しても弾幕が表示されます。iPhone の再生ページでエピソード名が省略されずに表示され、再生中のエピソードがはっきりわかります。動画の読み込み中に iPhone で落ちる問題と、iOS 17 の iPad で「その他」からページを開くと落ちる問題を修正しました。"
+          }
+        }
+      ]
+    },
+    {
+      "version": "1.8.5",
+      "build": 43,
+      "date": "2026-11-01",
+      "links": {
+        "macos": "https://download.getmegaportal.com/yingxia/1.8.5/Yingxia-1.8.5-macos-arm64.dmg",
+        "macos-x86_64": "https://download.getmegaportal.com/yingxia/1.8.5/Yingxia-1.8.5-macos-x86_64.dmg",
+        "ios": "https://yingxia.getmegaportal.com/#install-ios",
+        "tvos": "https://yingxia.getmegaportal.com/#install-tv"
+      },
+      "features": [
+        {
+          "symbol": "text.bubble",
+          "title": {
+            "en": "Official Dandanplay danmaku",
+            "zh-Hans": "官方弹弹play弹幕",
+            "zh-Hant": "官方彈彈play彈幕",
+            "ja": "公式 dandanplay の弾幕"
+          },
+          "detail": {
+            "en": "Danmaku now come straight from the official Dandanplay API instead of a public proxy, so matching an episode and searching for comments are faster and more reliable. If Dandanplay has nothing within five seconds, the other services are tried. Your own danmaku servers keep working as before.",
+            "zh-Hans": "弹幕现在直接来自弹弹play官方 API，不再经过公共代理，匹配剧集和搜索弹幕都更快、更稳定。如果弹弹play五秒内没有结果，会自动尝试其他服务。你自己添加的弹幕服务器照常可用。",
+            "zh-Hant": "彈幕現在直接來自彈彈play官方 API，不再經過公共代理，比對劇集和搜尋彈幕都更快、更穩定。如果彈彈play五秒內沒有結果，會自動嘗試其他服務。你自己加入的彈幕伺服器照常可用。",
+            "ja": "弾幕コメントは公開プロキシを経由せず、dandanplay の公式 API から直接取得するようになり、エピソードの照合もコメント検索も速く安定しました。dandanplay が 5 秒以内に見つからなければ、ほかのサービスを試します。自分で追加した弾幕サーバーはこれまでどおり使えます。"
+          }
+        },
+        {
+          "symbol": "film.stack",
+          "title": {
+            "en": "More videos from cloud drives play",
+            "zh-Hans": "更多网盘视频可以播放",
+            "zh-Hant": "更多網盤影片可以播放",
+            "ja": "クラウドドライブの動画がさらに再生可能に"
+          },
+          "detail": {
+            "en": "AV1 videos now play on Apple TV and on Macs, iPhones and iPads without an AV1 chip. MKV files with no length, or with a clock that starts late, play and seek properly. Quark's transcoded copies play again, a drive that sends back an empty chunk is simply asked again, and a video no longer fails with \"Could not connect to the server\" after the app comes back from the background.",
+            "zh-Hans": "AV1 视频现在可以在 Apple TV，以及没有 AV1 硬件解码的 Mac、iPhone 和 iPad 上播放。没有时长信息或时间轴起点靠后的 MKV 文件也能正常播放和拖动进度。夸克的转码版本重新可以播放；网盘返回空数据块时会自动重新请求；应用从后台回来后，视频不再报“无法连接服务器”。",
+            "zh-Hant": "AV1 影片現在可以在 Apple TV，以及沒有 AV1 硬體解碼的 Mac、iPhone 和 iPad 上播放。沒有時長資訊或時間軸起點較晚的 MKV 檔案也能正常播放和拖曳進度。夸克的轉碼版本重新可以播放；網盤回傳空資料區塊時會自動重新請求；App 從背景回來後，影片不再出現「無法連線伺服器」。",
+            "ja": "AV1 の動画が、Apple TV と、AV1 ハードウェアのない Mac・iPhone・iPad でも再生できるようになりました。長さの情報がない MKV や、時刻が途中から始まる MKV も正しく再生・シークできます。Quark のトランスコード版が再び再生でき、ドライブが空のデータを返したときは自動で取り直します。アプリがバックグラウンドから戻ったあとに「サーバーに接続できません」で止まることもなくなりました。"
+          }
+        },
+        {
+          "symbol": "info.circle",
+          "title": {
+            "en": "Show Video Info",
+            "zh-Hans": "显示视频信息",
+            "zh-Hant": "顯示影片資訊",
+            "ja": "ビデオ情報を表示"
+          },
+          "detail": {
+            "en": "Turn on Show Video Info in Settings or in the player to see a small panel in a corner of the picture: the video's codec, resolution, frame rate and HDR, the audio's codec and channels, the bitrate and the current download speed. It's off by default.",
+            "zh-Hans": "在“设置”或播放器中打开“显示视频信息”，画面角落会显示一个小面板：视频编码、分辨率、帧率和 HDR，音频编码和声道，码率以及当前下载速度。默认关闭。",
+            "zh-Hant": "在「設定」或播放器中開啟「顯示影片資訊」，畫面角落會顯示一個小面板：影片編碼、解析度、影格率和 HDR，音訊編碼和聲道，位元率以及目前下載速度。預設關閉。",
+            "ja": "「設定」またはプレーヤーで「ビデオ情報を表示」をオンにすると、画面の隅に小さなパネルが出て、映像のコーデック・解像度・フレームレート・HDR、音声のコーデックとチャンネル、ビットレート、現在のダウンロード速度がわかります。初期設定はオフです。"
+          }
+        },
+        {
+          "symbol": "paperclip",
+          "title": {
+            "en": "Pictures and videos in feedback",
+            "zh-Hans": "反馈可附图片和视频",
+            "zh-Hant": "回饋可附圖片和影片",
+            "ja": "フィードバックに写真・動画を添付"
+          },
+          "detail": {
+            "en": "Send Feedback can now attach up to four pictures or videos (pictures up to 10 MB, videos up to 50 MB), and it adds the diagnostic log by itself, so problems are easier to track down.",
+            "zh-Hans": "“反馈问题”现在可以附上最多 4 张图片或视频（图片最大 10 MB，视频最大 50 MB），并会自动附上诊断日志，问题更容易查清。",
+            "zh-Hant": "「意見回饋」現在可以附上最多 4 張圖片或影片（圖片最大 10 MB，影片最大 50 MB），並會自動附上診斷記錄，問題更容易查清。",
+            "ja": "「フィードバックを送信」で、写真や動画を 4 つまで添付できるようになりました（写真は 10 MB、動画は 50 MB まで）。診断ログも自動で添付されるので、問題を調べやすくなります。"
+          },
+          "platforms": [
+            "macos",
+            "ios"
+          ]
+        },
+        {
+          "symbol": "bolt",
+          "title": {
+            "en": "JAR sources open faster",
+            "zh-Hans": "JAR 源打开更快",
+            "zh-Hant": "JAR 來源開啟更快",
+            "ja": "JAR ソースがすばやく開きます"
+          },
+          "detail": {
+            "en": "After an app update, JAR sources no longer convert all of their code again the first time you use them. The code a source needs first is also prepared ahead of time while the app is idle, so the first tap on a source is much quicker.",
+            "zh-Hans": "应用更新后，JAR 源第一次使用时不再重新转换全部代码。源最先需要的代码也会在应用空闲时提前准备好，第一次点开源会快很多。",
+            "zh-Hant": "App 更新後，JAR 來源第一次使用時不再重新轉換全部程式碼。來源最先需要的程式碼也會在 App 閒置時提前準備好，第一次點開來源會快很多。",
+            "ja": "アプリを更新しても、JAR ソースを初めて使うときにコードをすべて変換し直すことはなくなりました。ソースが最初に必要とするコードはアプリが空いている間に前もって用意されるので、ソースを初めて開くのがずっと速くなります。"
+          },
+          "platforms": [
+            "ios",
+            "tvos"
+          ]
+        },
+        {
+          "symbol": "wrench.and.screwdriver",
+          "title": {
+            "en": "Other fixes",
+            "zh-Hans": "其他修复",
+            "zh-Hant": "其他修正",
+            "ja": "その他の修正"
+          },
+          "detail": {
+            "en": "The iPhone no longer crashes when iOS refuses to rotate the player. On iPhone, a video with several episodes waits for you to choose one instead of starting at once. Discover's pictures load on networks that block TMDB's image server. On Apple TV with tvOS 27, Add Subscription and other pop-ups no longer freeze the app. Apple TV's \"can't play\" page has Liquid Glass buttons. On iPhone, Search Sources from the catalog search now shows the results.",
+            "zh-Hans": "iOS 拒绝旋转播放器时，iPhone 不再闪退。在 iPhone 上，多集视频会等你选择剧集，而不是立刻开始播放。在屏蔽 TMDB 图片服务器的网络上，“发现”的图片也能加载。在 tvOS 27 的 Apple TV 上，“添加订阅”等弹窗不再让应用卡死。Apple TV 的“无法播放”页面改用 Liquid Glass 按钮。在 iPhone 上，从目录搜索里点“搜索片源”现在会显示搜索结果。",
+            "zh-Hant": "iOS 拒絕旋轉播放器時，iPhone 不再閃退。在 iPhone 上，多集影片會等你選擇集數，而不是立刻開始播放。在封鎖 TMDB 圖片伺服器的網路上，「探索」的圖片也能載入。在 tvOS 27 的 Apple TV 上，「新增訂閱」等彈出視窗不再讓 App 卡住。Apple TV 的「無法播放」頁面改用 Liquid Glass 按鈕。在 iPhone 上，從目錄搜尋裡點「搜尋片源」現在會顯示搜尋結果。",
+            "ja": "iOS がプレーヤーの回転を拒んだときに iPhone で落ちなくなりました。iPhone では、複数エピソードの動画はすぐに再生を始めず、エピソードを選ぶまで待ちます。TMDB の画像サーバーがブロックされているネットワークでも「見つける」の画像が表示されます。tvOS 27 の Apple TV で「配信設定を追加」などのポップアップでアプリが固まらなくなりました。Apple TV の「再生できません」画面のボタンが Liquid Glass になりました。iPhone のカタログ検索から「配信元を検索」を押すと、結果が表示されるようになりました。"
+          }
+        }
+      ]
+    },
+    {
+      "version": "1.8.4",
+      "build": 42,
+      "date": "2026-10-31",
+      "links": {
+        "macos": "https://download.getmegaportal.com/yingxia/1.8.4/Yingxia-1.8.4-macos-arm64.dmg",
+        "macos-x86_64": "https://download.getmegaportal.com/yingxia/1.8.4/Yingxia-1.8.4-macos-x86_64.dmg",
+        "ios": "https://yingxia.getmegaportal.com/#install-ios",
+        "tvos": "https://yingxia.getmegaportal.com/#install-tv"
+      },
+      "features": [
+        {
+          "symbol": "safari",
+          "title": {
+            "en": "Discover",
+            "zh-Hans": "发现",
+            "zh-Hant": "探索",
+            "ja": "見つける"
+          },
+          "detail": {
+            "en": "A new Discover tab for browsing movies and series from TMDB: trending and top-rated rows, networks, studios, genres and collections, with trailers that play right on the page. A title's page shows its seasons, cast, stills and studios, and Search Sources finds it in your sources. Search the catalog with filters for type, genre, year, platform, language and region, and open an actor or director to see everything they've made. On Apple TV, Discover has a new layout, made for the remote.",
+            "zh-Hans": "新增“发现”标签页，可浏览来自 TMDB 的电影和剧集：热门与高分榜单、电视网、出品公司、类型和合集，预告片直接在页面上播放。影片详情页会显示分季、演员、剧照和出品公司，点“搜索片源”即可在你的源中找到它。目录搜索可按类型、分类、年份、平台、语言和地区筛选，点开演员或导演就能看到其全部作品。在 Apple TV 上，“发现”采用了为遥控器设计的全新布局。",
+            "zh-Hant": "新增「探索」分頁，可瀏覽來自 TMDB 的電影和影集：熱門與高分榜單、電視網、出品公司、類型和合集，預告片直接在頁面上播放。影片詳情頁會顯示分季、演員、劇照和出品公司，點「搜尋片源」即可在你的來源中找到它。目錄搜尋可依類型、分類、年份、平台、語言和地區篩選，點開演員或導演就能看到其全部作品。在 Apple TV 上，「探索」採用了為遙控器設計的全新版面。",
+            "ja": "TMDB の映画やシリーズを見て回れる「見つける」タブを追加しました。人気・高評価のランキング、放送局、制作会社、ジャンル、コレクションがあり、予告編はページ上でそのまま再生されます。作品ページにはシーズン、キャスト、スチル、制作会社が表示され、「配信元を検索」で手持ちのソースから探せます。カタログ検索は種類・ジャンル・年・配信サービス・言語・地域で絞り込め、俳優や監督を開くとその人の全作品を見られます。Apple TV では、リモコン向けの新しいレイアウトになりました。"
+          }
+        },
+        {
+          "symbol": "externaldrive.connected.to.line.below",
+          "title": {
+            "en": "Your NAS and media server",
+            "zh-Hans": "你的 NAS 和媒体服务器",
+            "zh-Hant": "你的 NAS 和媒體伺服器",
+            "ja": "NAS とメディアサーバー"
+          },
+          "detail": {
+            "en": "Cloud Files now adds WebDAV shares, such as a NAS from Synology, QNAP, 绿联 or 极空间, and your own Emby or Jellyfin server, next to AList. Add Server works out which kind it is from the address. Global Search can also search the drives you've signed in to, as \"My Quark\", \"My UC\" and so on, next to your sources.",
+            "zh-Hans": "“网盘文件”现在可以添加 WebDAV 共享（例如群晖、威联通、绿联、极空间等 NAS）以及你自己的 Emby 或 Jellyfin 服务器，和 AList 并列。“添加服务器”会根据地址自动识别类型。“全局搜索”也能搜索你已登录的网盘，它们会以“我的夸克”“我的 UC”等名称和你的源一起出现。",
+            "zh-Hant": "「網盤檔案」現在可以加入 WebDAV 共享（例如群暉、威聯通、綠聯、極空間等 NAS）以及你自己的 Emby 或 Jellyfin 伺服器，和 AList 並列。「新增伺服器」會依位址自動辨識類型。「全域搜尋」也能搜尋你已登入的網盤，它們會以「我的夸克」「我的 UC」等名稱和你的來源一起出現。",
+            "ja": "「クラウドファイル」に、AList に加えて WebDAV 共有（Synology、QNAP、绿联、极空间などの NAS）と、自分の Emby / Jellyfin サーバーを追加できるようになりました。「サーバを追加」はアドレスから種類を自動で判別します。「横断検索」では、サインイン済みのドライブも「マイQuark」「マイUC」などとしてソースと一緒に検索できます。"
+          }
+        },
+        {
+          "symbol": "text.bubble",
+          "title": {
+            "en": "Choose where danmaku go",
+            "zh-Hans": "弹幕区域可调",
+            "zh-Hant": "彈幕區域可調",
+            "ja": "弾幕の表示範囲を選べます"
+          },
+          "detail": {
+            "en": "A new Danmaku Area setting keeps comments to the top quarter, half or three quarters of the screen, or lets them use all of it. It starts at three quarters, as before.",
+            "zh-Hans": "新增“弹幕区域”设置，可让弹幕只占屏幕上方 1/4、半屏或 3/4，也可以铺满全屏。默认仍为 3/4 屏，与之前一致。",
+            "zh-Hant": "新增「彈幕區域」設定，可讓彈幕只佔螢幕上方 1/4、半畫面或 3/4，也可以鋪滿全畫面。預設仍為 3/4 畫面，與之前一致。",
+            "ja": "新しい「弾幕の表示範囲」設定で、コメントを画面の上 1/4・半分・3/4 に収めるか、全体に流すかを選べます。初期値はこれまでどおり 3/4 です。"
+          }
+        },
+        {
+          "symbol": "wrench.and.screwdriver",
+          "title": {
+            "en": "Other fixes",
+            "zh-Hans": "其他修复",
+            "zh-Hant": "其他修正",
+            "ja": "その他の修正"
+          },
+          "detail": {
+            "en": "CatPawOpen sources that need a UC TV token can get one from Settings. 王二小's Quark lines no longer fail with a Go multi-thread error. With Smooth Motion on, the picture no longer flashes at 3x and 4x speed. Live channels jump back to the live edge after a long stall instead of freezing. Changing Downloads › At a Time no longer crashes. Plugins start again on iPhones and iPads with 3 GB of memory. On iPhone, the tab bar no longer pops in late after going back from a Discover page.",
+            "zh-Hans": "需要 UC TV Token 的 CatPawOpen 源可以在“设置”中获取。王二小的夸克线路不再报 Go 多线程错误。开启“智能补帧”时，3 倍速和 4 倍速播放不再闪屏。直播长时间卡顿后会跳回最新画面，而不是一直停住。修改“下载 › 同时下载”不再闪退。3 GB 内存的 iPhone 和 iPad 上插件重新可以启动。在 iPhone 上，从“发现”页面返回后标签栏不再延迟弹出。",
+            "zh-Hant": "需要 UC TV Token 的 CatPawOpen 來源可以在「設定」中取得。王二小的夸克線路不再出現 Go 多執行緒錯誤。開啟「智慧補幀」時，3 倍速和 4 倍速播放不再閃爍。直播長時間卡頓後會跳回最新畫面，而不是一直停住。修改「下載 › 同時下載」不再閃退。3 GB 記憶體的 iPhone 和 iPad 上外掛重新可以啟動。在 iPhone 上，從「探索」頁面返回後標籤列不再延遲彈出。",
+            "ja": "UC TV トークンが必要な CatPawOpen ソースは「設定」で取得できます。王二小の Quark 回線で Go マルチスレッドのエラーが出なくなりました。「なめらか補間」がオンでも、3 倍速・4 倍速で画面がちらつかなくなりました。ライブは長く止まったあと、固まったままにならず最新の位置へ戻ります。「ダウンロード › 同時ダウンロード数」を変えても落ちなくなりました。メモリ 3 GB の iPhone・iPad でプラグインが再び起動します。iPhone で「見つける」のページから戻ったとき、タブバーが遅れて現れなくなりました。"
+          }
+        }
+      ]
+    },
+    {
       "version": "1.8.3",
       "build": 41,
       "date": "2026-10-29",
@@ -2830,11 +3114,11 @@
   ],
   "testflight": {
     "ios": {
-      "build": 40,
+      "build": 43,
       "link": "https://testflight.apple.com/join/dU6UNbzp"
     },
     "tvos": {
-      "build": 40,
+      "build": 43,
       "link": "https://testflight.apple.com/join/SSgWEwSr"
     }
   }

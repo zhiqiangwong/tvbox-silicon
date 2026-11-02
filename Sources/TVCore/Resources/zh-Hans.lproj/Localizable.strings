@@ -1,4 +1,7 @@
 // Shared UI and user-facing errors. English is the source language.
+"%@ hasn't turned on search. Its administrator can build the search index in AList's settings." = "%@ 未开启搜索。管理员可在 AList 设置中建立搜索索引。";
+"My %@" = "我的%@";
+"This folder has no videos Apple devices can play." = "此文件夹中没有 Apple 设备可以播放的视频。";
 "Yingxia" = "映匣";
 "Yingxia / TVBOX" = "映匣 / TVBOX";
 "Watch Now" = "现在观看";
@@ -909,6 +912,18 @@
 "Your feedback becomes a public issue on Yingxia's GitHub page, with the app and system versions, the device model, the language and the included details. Please don't include accounts or passwords." = "你的反馈会作为公开问题发布在映匣的 GitHub 页面上，并附带 App 与系统版本、设备型号、语言和附带信息。请勿填写账号或密码。";
 "Included Details" = "附带信息";
 "Include Details" = "附带信息";
+"Add Photos or Videos" = "添加照片或视频";
+"Uploading…" = "正在上传…";
+"Uploading… %@" = "正在上传… %@";
+"Attach Diagnostic Log" = "附带诊断日志";
+"The diagnostic log goes to the developer only, not into the public issue. It helps find what went wrong." = "诊断日志只发给开发者，不会出现在公开的 Issue 中，可帮助找出问题所在。";
+"Pictures and videos you add appear in the public issue, without where they were taken." = "你添加的图片和视频会显示在公开的 Issue 中，拍摄地点等信息会被移除。";
+"You can add up to %lld pictures or videos." = "最多可添加 %lld 张图片或视频。";
+"You've uploaded a lot of pictures and videos today. You can send more after %@." = "你今天上传的图片和视频已经很多了，%@ 之后可以再发送。";
+"You've uploaded a lot of pictures and videos today. Please try again tomorrow." = "你今天上传的图片和视频已经很多了，请明天再试。";
+"This file can't be added. Choose a picture or a video." = "无法添加此文件，请选择图片或视频。";
+"Videos can be up to %@. Choose a shorter one." = "视频最大 %@，请选择更短的视频。";
+"Pictures can be up to %@." = "图片最大 %@。";
 "Your subscriptions and what you played lately help find the problem. Edit or remove anything you'd rather keep private." = "你的订阅和最近播放的内容有助于找到问题。不想公开的内容可以修改或删除。";
 "Thank You!" = "谢谢你！";
 "Your feedback is now issue #%lld on GitHub." = "你的反馈已成为 GitHub 上的问题 #%lld。";
@@ -960,10 +975,10 @@
 "Added %lld AList servers. Browse them in Cloud Files." = "已添加 %lld 个 AList 服务器，可在“网盘文件”中浏览。";
 "This address is now an AList server. Add it again to browse it in Cloud Files." = "此地址现在是 AList 服务器。重新添加即可在“网盘文件”中浏览。";
 "Sign in to Quark or UC under Cloud Drive Accounts to browse their files here." = "在“网盘账号”中登录夸克或 UC 后，即可在此浏览其中的文件。";
-"Add an AList or OpenList server by the address you open it at. Pasting that address, or a TVBox AList configuration, in Add Subscription adds servers too." = "用打开 AList 或 OpenList 服务器的地址来添加它。在“添加订阅”中粘贴该地址或 TVBox AList 配置，也能添加服务器。";
+"Add an AList or OpenList server, a NAS's WebDAV share, or an Emby or Jellyfin server, by the address you open it at. Pasting an AList address, or a TVBox AList configuration, in Add Subscription adds servers too." = "用打开 AList、OpenList 服务器、NAS 的 WebDAV 共享或 Emby、Jellyfin 服务器的地址来添加它。在“添加订阅”中粘贴 AList 地址或 TVBox AList 配置，也能添加服务器。";
 "Edit Server" = "编辑服务器";
 "Remove Server" = "移除服务器";
-"Add AList Server" = "添加 AList 服务器";
+"Add Server" = "添加服务器";
 "Remove %@ from Cloud Files?" = "要从网盘文件中移除%@吗？";
 "This Folder Is Empty" = "此文件夹为空";
 "Couldn't Open This Folder" = "无法打开此文件夹";
@@ -971,12 +986,12 @@
 "Password" = "密码";
 "Open" = "打开";
 "Enter the password for %@." = "输入“%@”的密码。";
-"The address you open the server at in a browser, such as http://192.168.1.10:5244. Add a folder after it to start there. The user name and password are only for servers that don't let guests browse." = "在浏览器中打开服务器所用的地址，例如 http://192.168.1.10:5244。在后面加上文件夹即可从那里开始浏览。用户名和密码仅用于不允许游客浏览的服务器。";
+"The server's address, such as http://192.168.1.10:5244 for AList, http://192.168.1.10:8096 for Emby or Jellyfin, or the WebDAV address your NAS shows. Add a folder after an AList or WebDAV address to start there. Emby and Jellyfin always want the user name; the others only when they don't let guests browse." = "服务器的地址，例如 AList 的 http://192.168.1.10:5244、Emby 或 Jellyfin 的 http://192.168.1.10:8096，或 NAS 显示的 WebDAV 地址。在 AList 或 WebDAV 地址后面加上文件夹即可从那里开始浏览。Emby 和 Jellyfin 总是需要用户名；其他服务器仅在不允许游客浏览时需要。";
 "Address" = "地址";
 "Name (Optional)" = "名称（可选）";
 "User Name (Optional)" = "用户名（可选）";
 "Password (Optional)" = "密码（可选）";
-"No AList server answered at this address." = "此地址上没有响应的 AList 服务器。";
+"No AList, WebDAV, Emby or Jellyfin server answered at this address." = "此地址上没有响应的 AList、WebDAV、Emby 或 Jellyfin 服务器。";
 "This server doesn't let guests browse. Enter a user name and password." = "此服务器不允许游客浏览，请输入用户名和密码。";
 "Sign in to Quark and UC on their official page. Yingxia stores the login on this Mac." = "夸克和 UC 在官方页面登录。映匣会将登录信息保存在这台 Mac 上。";
 "Sign in on the drive's own page, or scan a code with the drive's app on another phone. Yingxia keeps the sign-in on this device." = "在网盘官方页面登录，或用另一台手机上的网盘 App 扫码登录。映匣会将登录信息保存在这台设备上。";
@@ -1122,6 +1137,174 @@
 "Ranked by commits in the last 30 days." = "按最近 30 天的提交次数排序。";
 "1 commit" = "1 次提交";
 "%lld commits" = "%lld 次提交";
+
+// Discover catalog
+"Discover" = "发现";
+"Trending This Week" = "本周趋势";
+"In Theaters" = "正在热映";
+"On the Air" = "正在播出";
+"Popular Animation" = "热门动漫";
+"Popular Movies" = "热门电影";
+"Popular TV Shows" = "热门剧集";
+"Top Rated Movies" = "高分电影";
+"Top Rated TV Shows" = "高分剧集";
+"Coming Soon" = "即将上映";
+"Chinese TV Shows" = "华语剧集";
+"Korean TV Shows" = "韩语剧集";
+"Variety Shows" = "综艺";
+"Popular Variety Shows" = "热门综艺";
+"Popular Chinese Dramas" = "热门华语剧集";
+"Search movies and TV shows" = "搜索电影和剧集";
+"Some lists couldn't load. Try again." = "部分栏目加载失败，点此重试。";
+"No Titles Available" = "暂无影片";
+"Please try again later." = "请稍后重试。";
+"Search Sources" = "搜索片源";
+"View on TMDB" = "在 TMDB 查看";
+"Search couldn't load. Please try again." = "搜索失败，请重试。";
+"Action" = "动作";
+"Adventure" = "冒险";
+"Animation" = "动画";
+"Comedy" = "喜剧";
+"Crime" = "犯罪";
+"Documentary" = "纪录";
+"Drama" = "剧情";
+"Family" = "家庭";
+"Fantasy" = "奇幻";
+"Historical" = "历史";
+"Horror" = "恐怖";
+"Mystery" = "悬疑";
+"Romance" = "爱情";
+"Science Fiction" = "科幻";
+"Thriller" = "惊悚";
+"War" = "战争";
+"Western" = "西部";
+"Action & Adventure" = "动作与冒险";
+"Kids" = "儿童";
+"News" = "新闻";
+"Reality" = "真人秀";
+"Sci-Fi & Fantasy" = "科幻与奇幻";
+"Talk" = "脱口秀";
+
+"Edit Layout" = "编辑布局";
+"Featured Titles" = "精选影片";
+"Featured Collections" = "精选专题";
+"People" = "人物";
+"Networks" = "播出平台";
+"Browse by Genre" = "分类浏览";
+"Top Rated Collections" = "高分片单";
+"Film Studios" = "电影公司";
+
+"Studios & Networks" = "制片与播出平台";
+
+"Stills" = "剧照";
+
+"Trailer Unavailable" = "预告片暂时无法播放";
+
+"Crew" = "工作人员";
+
+"Share" = "分享";
+
+"Overview" = "剧情简介";
+
+"Trailer" = "预告片";
+
+"min" = "分钟";
+
+"Seasons" = "季";
+
+"Genres" = "类型";
+
+"Release Date" = "上映日期";
+
+"Country / Region" = "国家 / 地区";
+
+"Status" = "状态";
+
+"Returning Series" = "连载中";
+
+"Ended" = "已完结";
+
+"In Production" = "制作中";
+
+"Post Production" = "后期制作";
+
+"Planned" = "筹备中";
+
+"Canceled" = "已取消";
+
+"Rumored" = "传闻";
+
+/* Discover catalog search */
+"Search Catalog" = "搜索影视";
+"Movies, Series, People" = "电影、剧集、人物";
+"Clear Search History" = "清空搜索记录";
+"Recently Viewed" = "最近浏览";
+"Clear Recently Viewed" = "清空浏览记录";
+"Discover More" = "发现更多";
+"Trending Today" = "今日趋势";
+"Popular" = "热门";
+"Collapse" = "收起";
+"See All" = "查看全部";
+"Load More" = "加载更多";
+"Try another title or change your filters." = "换个关键词，或调整筛选条件。";
+"Couldn't Load Results" = "暂时无法加载结果";
+"Loading" = "正在加载";
+"Filter" = "筛选";
+"Reset Filters" = "清除筛选";
+"Keywords" = "关键词";
+"Years" = "年份";
+"Sort By" = "排序";
+"Platform / Studio" = "平台／片商";
+"Region" = "地区";
+"Show Results" = "查看结果";
+"Release Year" = "上映年份";
+"From" = "起始";
+"To" = "截止";
+"Minimum Rating" = "最低评分";
+"Minimum Votes" = "最低评价人数";
+"Runtime (min)" = "时长（分钟）";
+"Find a keyword" = "搜索关键词";
+"Enter a valid range, from lowest to highest." = "请输入有效范围，起始值不能大于截止值。";
+"Popularity ↓" = "热度从高到低";
+"Popularity ↑" = "热度从低到高";
+"Rating ↓" = "评分从高到低";
+"Rating ↑" = "评分从低到高";
+"Newest First" = "最新优先";
+"Oldest First" = "最早优先";
+"Most Votes" = "评价人数最多";
+"Highest Revenue" = "票房最高";
+"Filmography" = "参与作品";
+"Soap" = "肥皂剧";
+"War & Politics" = "战争与政治";
+"Acting" = "演员";
+"Directing" = "导演";
+"Writing" = "编剧";
+"Production" = "制片";
+
+/* Discover catalog search */
+"Movies" = "电影";
+"Series" = "剧集";
+"Content Type" = "影视类别";
+"Topics" = "题材";
+
+"Any" = "不限";
+
+"Filter Type" = "类型";
+
+"Filter Genre" = "分类";
+
+"Filtered Results" = "筛选结果";
+
+"Actor" = "演员";
+
+"%@s" = "%@ 年代";
+
+"Language" = "语言";
+
+"Catalog Series" = "电视剧";
+
+"TV Movie" = "电视电影";
+
 "iCloud Sync" = "iCloud 同步";
 "Keeps favorites, Continue Watching, subscriptions, and the sources you pinned, hid or ordered the same on your devices signed in to the same iCloud account. Accounts, passwords and downloads stay on each device." = "在登录同一 iCloud 账户的设备之间同步收藏、继续观看、订阅，以及你置顶、隐藏或排序的源。账号、密码和下载内容只保存在各自的设备上。";
 "Danmaku Area" = "弹幕区域";
@@ -1129,7 +1312,41 @@
 "Top Half" = "半屏";
 "Top Three Quarters" = "3/4 屏";
 "Whole Screen" = "全屏";
-"No Results" = "无结果";
+"No Results" = "没有找到结果";
 "No Results for “%@”" = "没有“%@”的结果";
 "Check the spelling or try a new search." = "请检查拼写或尝试新的搜索词。";
 "Yingxia %@ is available upstream. iOS 16 requires a verified iOS 16-compatible build rather than the default iOS 17+ release package." = "上游已发布映匣 %@。iOS 16 需安装经验证的 iOS 16 兼容构建版本，请勿直接安装默认的 iOS 17+ 发行包。";
+
+"UC TV Token" = "UC TV Token";
+"Get UC TV Token" = "获取 UC TV Token";
+"You're signed in to UC, but this source plays UC accounts without premium through UC's TV app, which needs a token of its own. Get it once with the UC Browser app, or choose another line." = "你已登录 UC，但此片源通过 UC 网盘 TV 版播放非会员账号，需要单独的 TV Token。用 UC 浏览器获取一次即可，或换一条线路。";
+"Scan this code with the UC Browser app on your phone, signed in to the same UC account, and approve it." = "用手机上的 UC 浏览器（登录同一 UC 账号）扫描此二维码并确认。";
+"Approve the token in the UC Browser app, signed in to the same UC account: open it here, or scan the code with UC Browser on another phone." = "请在 UC 浏览器（登录同一 UC 账号）中确认：在本机打开，或用另一部手机的 UC 浏览器扫描二维码。";
+"Open in UC Browser" = "在 UC 浏览器中打开";
+"UC Browser isn't on this device. Get UC Browser (UC浏览器) from the App Store and sign in to it, or scan the code with another phone." = "此设备未安装 UC 浏览器。请从 App Store 下载 UC 浏览器并登录，或用另一部手机扫码。";
+"Waiting for UC Browser to approve…" = "等待 UC 浏览器确认…";
+
+"%lld works" = "%lld 部作品";
+
+"Contribution" = "参与职务";
+
+"Editing" = "剪辑";
+
+"List View" = "列表视图";
+
+"Grid View" = "网格视图";
+
+"No works match these filters." = "没有符合筛选条件的作品。";
+
+"Show Video Info" = "显示视频信息";
+
+"Shows the video's format, resolution, frame rate and bitrate in a corner of the player." = "在播放器一角显示视频的格式、分辨率、帧率和码率。";
+
+"Bitrate %@" = "码率 %@";
+
+"Download %@" = "下载 %@";
+
+"Uses the official Dandanplay service. You can also enter your own compatible server." = "使用弹弹play官方服务，也可填入自建兼容服务地址。";
+"This build is missing its Dandanplay API configuration." = "此版本缺少弹弹play API 配置。";
+"Uses Dandanplay first, then tries iQIYI and Tencent Video if no comments are found or the service is unavailable. Official public episode pages are sent to dmku, or to danmu.zxz.ee when dmku has none; stream URLs and playback headers are never sent." = "优先使用弹弹play；没有找到弹幕或服务不可用时，再查询爱奇艺和腾讯视频。仅将官方公开单集页面交给 dmku（dmku 没有时交给 danmu.zxz.ee），不发送播放流地址或请求头。";
+"Dandanplay has reached its request limit for now. Try again later, or choose another danmaku server." = "弹弹play 的请求次数暂时用完了，请稍后再试，或换一个弹幕服务器。";

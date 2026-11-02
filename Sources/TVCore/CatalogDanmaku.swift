@@ -160,15 +160,28 @@ public enum CatalogDanmakuMatcher {
     }
 }
 
+/// Dandanplay's requests for this app are few and shared by every install. Once they are used up it answers
+/// HTTP 429, or HTTP 200 with `errorCode` 429.
+public struct DandanplayLimitReached: LocalizedError, Sendable {
+    public init() {}
+    public var errorDescription: String? {
+        L10n.text("Dandanplay has reached its request limit for now. Try again later, or choose another danmaku server.")
+    }
+}
+
 /// Automatic matching and manual searches send only titles and IDs. Video URLs,
 /// subscription URLs, headers and credentials are never sent to this service.
 public struct CatalogDanmakuClient: Sendable {
-    public static let defaultServer = "https://danmaku-api.152468.xyz"
+    public static let defaultServer = "https://api.dandanplay.net"
+    public static let legacyDefaultServer = "https://danmaku-api.152468.xyz"
     public let server: URL
     private let transport: DanmakuHTTP?
+    private let credentials: DandanplayCredentials?
 
-    public init(address: String = Self.defaultServer, transport: DanmakuHTTP? = nil) throws {
+    public init(address: String = Self.defaultServer, transport: DanmakuHTTP? = nil,
+                credentials: DandanplayCredentials? = .bundled) throws {
         self.transport = transport
+        self.credentials = credentials
         let url = try WebAddress.resolve(address.trimmingCharacters(in: .whitespacesAndNewlines))
         guard url.user == nil, url.password == nil, url.query == nil, url.fragment == nil else {
             throw TVError.unsupported(L10n.text("Enter the danmaku server base URL, without a query or fragment."))
@@ -178,7 +191,7 @@ public struct CatalogDanmakuClient: Sendable {
         while value.hasSuffix("/") { value.removeLast() }
         if value.hasSuffix("/api/v2") { value = String(value.dropLast(7)) }
         guard let base = URL(string: value) else { throw TVError.invalidURL }
-        server = base
+        server = base.absoluteString == Self.legacyDefaultServer ? URL(string: Self.defaultServer)! : base
     }
 
     public func search(_ keyword: String) async throws -> [CatalogDanmakuAnime] {
@@ -217,14 +230,23 @@ public struct CatalogDanmakuClient: Sendable {
         var request = URLRequest(url: parts.url!, timeoutInterval: 25)
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("Yingxia (danmaku; https://www.getmegaportal.com)", forHTTPHeaderField: "User-Agent")
+        if DandanplayCredentials.isOfficial(request.url!) {
+            guard let credentials else {
+                throw TVError.unsupported(L10n.text("This build is missing its Dandanplay API configuration."))
+            }
+            credentials.sign(&request)
+        }
         if let transport {
-            let data = try await transport.send(request)
+            let data: Data
+            do { data = try await transport.send(request) } catch TVError.http(429) { throw DandanplayLimitReached() }
             guard data.count <= CatalogDanmakuParser.maximumBytes else { throw unsupported() }
+            try Self.checkLimit(data)
             return data
         }
-        let (bytes, response) = try await URLSession.shared.bytes(for: request)
+        let (bytes, response) = try await URLSession.shared.bytes(for: request, delegate: request.value(forHTTPHeaderField: "X-AppId") == nil ? nil : DandanplayRedirectPolicy.shared)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {
+            if status == 429 { throw DandanplayLimitReached() }
             if status == 401 || status == 403 { throw TVError.unsupported(L10n.text("This danmaku server requires authorization. Choose a compatible public or self-hosted server.")) }
             throw TVError.unsupported(L10n.text("The server returned HTTP %lld.", status))
         }
@@ -235,7 +257,15 @@ public struct CatalogDanmakuClient: Sendable {
             data.append(byte)
         }
         try Task.checkCancellation()
+        try Self.checkLimit(data)
         return data
+    }
+
+    /// A refusal is a short JSON object; comments and episode lists are far longer and never parsed here.
+    static func checkLimit(_ data: Data) throws {
+        guard data.count < 2048, let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              root["success"] as? Bool == false, (root["errorCode"] as? NSNumber)?.intValue == 429 else { return }
+        throw DandanplayLimitReached()
     }
 
     private func object(_ data: Data) throws -> [String: Any] {

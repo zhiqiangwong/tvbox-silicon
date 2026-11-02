@@ -447,3 +447,21 @@
 - IPA：`/Users/konvy-1054/www/ai/tvbox-silicon/build/sideload/ios16-test-20261030.Wko8OK/Yingxia-1.8.3-iOS16-Test.ipa`，大小 113800023 字节。
 - SHA-256：`f767f4a0ecd3f0df01eca81f7d16f11e433e0a4b5b7c7a918e0f2118893aaa08`；归档、SHA256.txt 和 build-info.json 保存在同目录。
 - 本包包含最新 iOS 16 iPad 精简导航；真机安装、播放及黑屏原因仍待验证，未勾选真机验收任务。
+
+## 12. 2026-11-02 上游整合与推送前验证
+
+- 用户明确要求先整合上游、验证，再推送 fork 的 `codex/support-ios16` 分支。保留原适配提交 `b5521e6`；本轮整合 `upstream/main` 的 `b4b48ff`（原基准之后 118 个提交），不重写已有提交。
+- 处理 15 个冲突文件，保留上游“发现”、首页布局、播放与导航修复；新增观察模型改用既有 Perception 方案，新增页面补充状态追踪与可用性分支。
+- iOS 16 iPad 继续使用四个栏目加应用自身“更多”。保留上游新修复的 iOS 17 iPad 导航策略；iOS 18+ 沿用上游分支。首页新增分页在 iOS 16 使用原生分页 TabView；新系统保留上游实现。人物页旧系统省略视差效果，焦点与内容边距复用兼容入口。
+- 上游 FFmpeg 新增 dav1d；首次构建实际因 Meson 配置阶段找不到虚拟环境中的 Ninja 失败，补齐该阶段 PATH 后六个平台切片全部重建成功。两处新增 Swift 测试补充 `UnsafeMutableRawBufferPointer` 类型，解决当前工具链的重载歧义。
+- 四种语言合并产生的 `No Results` 重复键已去重，以完整上游翻译为准，保留另外 3 个兼容键；逐项确认上游键值未遗漏、未改写，`plutil -lint` 全部通过。
+
+验证结果（本轮日志保存在忽略目录 `build/merge-upstream-20261102/`）：
+
+1. `TVBox-iOS` Debug / iOS Simulator 构建通过，日志 `ios-debug.log`。`TVBox-iOS` Release / generic iOS 真机构建通过，日志 `ios-release.log`。均使用当前 Xcode、`-skipMacroValidation`、`CODE_SIGNING_ALLOWED=NO`，未开启 APPSTORE。
+2. Release 产物为 1.8.6 (44)，最低 iOS 16.0。逐项检查 103 个 Mach-O 文件均为 arm64 真机架构、最低系统版本不高于 16.0。Java/Python/Node 资源与 Assets.car 存在，JNI/JIMAGE/JNA 导出保留，详见 `artifact-audit.json`。本轮没有制作新的 IPA，旧测试 IPA 不代表本轮合并结果。
+3. Swift 定向测试选择 TMDBCatalog、TMDBCatalogSearch、PlaybackInfo、CloudFiles、Favorites、ReleaseFeed、CloudStreams：71 项中 64 项通过、5 项因需要真实服务器或平台条件而跳过、2 项失败（9 个断言），未宣称全绿。失败为 `relaunchFailureIsTranslated` 和 `networkInfoShowsTheBitrateAndDownloadSpeed` 的中文断言。实测 SwiftPM 生成 `zh-hans.lproj` / `zh-hant.lproj` 后，Foundation 的 `path(forResource: "zh-Hans", ofType: "lproj")` 返回 nil；同一份上游本地化代码和翻译在标准目录中可正确读取。实际 iOS Debug/Release 资源目录为 `zh-Hans.lproj` / `zh-Hant.lproj`，其资源查找正常。本轮未扩展修改本地化逻辑。
+4. Java 宿主重建并同步真机及模拟器资源成功。Java 全套脚本在 HostCompatibilityTest 中因查找旧日志库类 `org.slf4j.impl.SimpleLoggerFactory` 失败；上游测试与 pom 的 slf4j 2.0.13 依赖同样存在该不一致，本轮未修改两者。另行执行 PluginLoadingTest、ConversionResumeTest、ConvertAheadTest、RequestCancellationTest、RequestStopTest，5 项全部通过，日志 `java-targeted-tests.log`。
+5. 修改的 Shell 脚本通过 `bash -n`，Swift 源文件通过语法解析，差异检查通过。
+6. 本轮 iOS 16.4 模拟器启动报告 Data Migration Failed，界面工具随后确认 Mac 处于锁屏且无法自动解锁；未清除设备数据。因此未完成本轮界面运行回归，不将编译成功视为运行验收。
+7. 音乐搜索列表和全屏歌词的两处状态追踪审查意见，按用户要求暂缓处理；原视频黑屏根因及真机验收仍未完成。本轮不勾选对应未完成任务。

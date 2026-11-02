@@ -2,7 +2,7 @@ import SwiftUI
 import TVCore
 
 enum AppSection: String, CaseIterable, Identifiable, Hashable {
-    case home = "Watch Now", live = "Live TV", music = "Music", search = "Global Search", sites = "Sources", files = "Cloud Files", favorites = "Favorites", history = "Playback History", downloads = "Downloads", settings = "Settings", more = "More"
+    case home = "Watch Now", discover = "Discover", live = "Live TV", music = "Music", search = "Global Search", sites = "Sources", files = "Cloud Files", favorites = "Favorites", history = "Playback History", downloads = "Downloads", settings = "Settings", more = "More"
     /// Messages from the website (App/Announcements.swift); only the phone lists it, in More.
     case messages = "Messages"
     /// Apple TV's sidebar item for the song playing, first while one is loaded; it opens the player.
@@ -14,6 +14,7 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
     var icon: String {
         switch self {
         case .home: "play.rectangle.fill"
+        case .discover: "safari.fill"
         case .search: "magnifyingglass"
         case .live: "dot.radiowaves.left.and.right"
         case .music: "music.note"
@@ -60,7 +61,7 @@ struct RootView: View {
         return sections
     }
     private var sections: [AppSection] {
-        let sections = [AppSection.home, .live, .music, .search, .sites, .files, .history, .favorites, .downloads, .settings]
+        let sections = [AppSection.home, .discover, .live, .music, .search, .sites, .files, .history, .favorites, .downloads, .settings]
             .filter { !store.hiddenSections.contains($0) }
         #if os(tvOS)
         // Where the remote already goes to change section, so the song is one move away from anywhere.
@@ -86,83 +87,81 @@ struct RootView: View {
         #endif
         return busy
     }
-    var body: some View {
-        AppPerceptionTracking {
-            @AppBindable var store = store
-            Group {
-                #if os(macOS)
-                NavigationSplitView {
-                    MacSidebar()
-                        .navigationSplitViewColumnWidth(min: 190, ideal: 216, max: 260)
-                } detail: {
-                    // The music bar floats over every page while a song is loaded, as in Music.
-                    // The stack stays put across sections. Rebuilding it resets the sidebar column, so a
-                    // section change collapsed the sidebar while the new page was still a placeholder.
-                    NavigationStack(path: $detailPath) { content(store.section).musicBar().routeDestinations() }
-                        .environment(\.openRoute) { detailPath.append($0) }
-                }
-                .onChange(of: store.section) { detailPath = NavigationPath() }
-                .overlay {
-                    if nowPlayingShown { MusicMacNowPlaying().ignoresSafeArea().transition(.move(edge: .bottom)) }
-                }
-                .background { NowPlayingWindowChrome(active: hidesToolbar, store: store) }
-                .background { MusicMiniPlayerTrigger() }
-                .onChange(of: store.music.presentsPlayer && store.music.track != nil) { _, show in
-                    // Hiding the toolbar moves the page under it. The player slides up over the window
-                    // first and the toolbar goes once it is covered; closing brings the toolbar back
-                    // before the player slides away.
-                    if show {
-                        withAnimation(.spring(response: 0.45, dampingFraction: 0.92)) { nowPlayingShown = true } completion: {
-                            if nowPlayingShown { hidesToolbar = true }
-                        }
-                    } else {
-                        hidesToolbar = false
-                        withAnimation(.spring(response: 0.4, dampingFraction: 1)) { nowPlayingShown = false }
+    var body: some View { AppPerceptionTracking {
+        @AppBindable var store = store
+        Group {
+            #if os(macOS)
+            NavigationSplitView {
+                MacSidebar()
+                    .navigationSplitViewColumnWidth(min: 190, ideal: 216, max: 260)
+            } detail: {
+                // The music bar floats over every page while a song is loaded, as in Music.
+                // The stack stays put across sections. Rebuilding it resets the sidebar column, so a
+                // section change collapsed the sidebar while the new page was still a placeholder.
+                NavigationStack(path: $detailPath) { content(store.section).musicBar().routeDestinations() }
+                    .environment(\.openRoute, RouteOpener { detailPath.append($0) })
+            }
+            .onChangeCompat(of: store.section) { detailPath = NavigationPath() }
+            .overlay {
+                if nowPlayingShown { MusicMacNowPlaying().ignoresSafeArea().transition(.move(edge: .bottom)) }
+            }
+            .background { NowPlayingWindowChrome(active: hidesToolbar, store: store) }
+            .background { MusicMiniPlayerTrigger() }
+            .onChangeCompat(of: store.music.presentsPlayer && store.music.track != nil) { _, show in
+                // Hiding the toolbar moves the page under it. The player slides up over the window
+                // first and the toolbar goes once it is covered; closing brings the toolbar back
+                // before the player slides away.
+                if show {
+                    withAnimation(.spring(response: 0.45, dampingFraction: 0.92)) { nowPlayingShown = true } completion: {
+                        if nowPlayingShown { hidesToolbar = true }
                     }
+                } else {
+                    hidesToolbar = false
+                    withAnimation(.spring(response: 0.4, dampingFraction: 1)) { nowPlayingShown = false }
                 }
-                #else
-                // The system tab bar on every size class: iOS 26 floats it over content and
-                // collapses extra sections into More, which a hand-built bar imitated poorly.
-                platformTabs
-                #endif
             }
-            .onChangeCompat(of: store.section) { _, section in
-                if section != .search { store.searchModel.suspend() }
-            }
-            // A Baidu or Aliyun line waiting for its plugin's sign-in code to be scanned.
-            .sheet(item: Binding(get: { PluginSignIn.shared.prompt }, set: { if $0 == nil { PluginSignIn.shared.dismiss() } })) {
-                PluginSignInView(prompt: $0)
-            }
-            #if os(tvOS)
-            .fullScreenCover(isPresented: Binding(get: { store.music.presentsPlayer }, set: { store.music.presentsPlayer = $0 })) { MusicPlayerScreen() }
+            #else
+            // The system tab bar on every size class: iOS 26 floats it over content and
+            // collapses extra sections into More, which a hand-built bar imitated poorly.
+            platformTabs
             #endif
-            // A video and a song never play over each other.
-            .onChangeCompat(of: store.playing) { _, channel in if channel != nil { store.music.pause() } }
-            .modifier(PlayerPresentation(playing: $store.playing))
-            #if os(tvOS) || os(macOS)
-            // What another device sent, while it opens.
-            .overlay { PlayOnIncoming().animation(.spring(duration: 0.4), value: PlayOnController.shared.incoming?.title) }
-            #endif
-            .updatePresentation(updates, playing: store.playing != nil)
-            .announcementPresentation(announcements, blocked: messageWaits)
-            .alert(L10n.text("Unable to Complete"), isPresented: Binding(get: { store.error != nil }, set: { if !$0 { store.error = nil } })) {
-                Button(L10n.text("OK"), role: .cancel) { store.error = nil }
-            } message: { Text(store.error ?? "") }
         }
-    }
-
+        .onChangeCompat(of: store.section) { _, section in
+            if section != .search { store.searchModel.suspend() }
+        }
+        // A Baidu or Aliyun line waiting for its plugin's sign-in code to be scanned.
+        .sheet(item: Binding(get: { PluginSignIn.shared.prompt }, set: { if $0 == nil { PluginSignIn.shared.dismiss() } })) {
+            PluginSignInView(prompt: $0)
+        }
+        #if os(tvOS)
+        .fullScreenCover(isPresented: Binding(get: { store.music.presentsPlayer }, set: { store.music.presentsPlayer = $0 })) { MusicPlayerScreen() }
+        #endif
+        // A video and a song never play over each other.
+        .onChangeCompat(of: store.playing) { _, channel in if channel != nil { store.music.pause() } }
+        .modifier(PlayerPresentation(playing: $store.playing))
+        #if os(tvOS) || os(macOS)
+        // What another device sent, while it opens.
+        .overlay { PlayOnIncoming().animation(.spring(duration: 0.4), value: PlayOnController.shared.incoming?.title) }
+        #endif
+        .updatePresentation(updates, playing: store.playing != nil)
+        .announcementPresentation(announcements, blocked: messageWaits)
+        .alert(L10n.text("Unable to Complete"), isPresented: Binding(get: { store.error != nil }, set: { if !$0 { store.error = nil } })) {
+            Button(L10n.text("OK"), role: .cancel) { store.error = nil }
+        } message: { Text(store.error ?? "") }
+    } }
     #if !os(macOS)
     #if os(iOS)
     /// The phone's tab bar: the tabs the viewer arranged, then More with the rest and the tab bar editor. Every
     /// iPhone screen uses it, not only compact ones: iPhone Duo's inner display is regular both ways, and there
     /// the full set of sections overflowed the side tab bar into the system's own More list, without the editor.
+    /// iPads on iOS 17 use it too. Their classic tab bar shows seven tabs and moves the rest into UIKit's More list,
+    /// which wraps each tab's NavigationStack in its own navigation controller: opening a section there and then
+    /// another tab crashed with "Layout requested for visible navigation bar ... nest wrapped navigation
+    /// controllers" (#301). Seven sections and the app's own More fit that bar without the system list.
     @AppStorage(PhoneTabs.labelsKey) private var showsTabLabels = true
     private var phoneTabs: Bool {
-        // iOS 16 iPad uses the existing compact bar and More navigation, even full-screen.
-        if #available(iOS 17, *) {
-            return sizeClass == .compact || UIDevice.current.userInterfaceIdiom == .phone
-        }
-        return true
+        if #unavailable(iOS 18) { return true }
+        return sizeClass == .compact || UIDevice.current.userInterfaceIdiom == .phone
     }
     /// Sections a phone reaches through More, as arranged in the tab bar editor.
     private var inMore: [AppSection] { PhoneTabs(stored: storedTabs).arranged(slots: barSlots, hiding: store.hiddenSections).more }
@@ -174,14 +173,14 @@ struct RootView: View {
             .musicSidebarHeader()
             // Now Playing is not a page: choosing it opens the full-screen player over the section
             // the viewer was in. The sidebar selects on a click, not on focus, so passing it opens nothing.
-            .onChange(of: store.section) { previous, section in
+            .onChangeCompat(of: store.section) { previous, section in
                 guard section == .nowPlaying else { return }
                 store.section = previous == .nowPlaying ? .music : previous
                 store.music.presentsPlayer = true
             }
             // tvOS 17: a section in More opens there, whether a button or the Now Playing tab moved it in.
-            .onChange(of: store.section) { _, section in openInMore(section) }
-            .onChange(of: tvMore) { _, more in
+            .onChangeCompat(of: store.section) { _, section in openInMore(section) }
+            .onChangeCompat(of: tvMore) { _, more in
                 if more.isEmpty && store.section == .more { store.section = morePath.isEmpty ? .home : moreSection }
                 else { openInMore(store.section) }
             }
@@ -229,10 +228,12 @@ struct RootView: View {
             // bottom on iPad too.
             TabView(selection: $store.section) {
                 ForEach(tabs) { item in
+                    AppPerceptionTracking {
                     tabPage(item).tabItem { tabLabel(item) }.tag(item)
                         #if os(iOS)
                         .badge(tabBadge(item))
                         #endif
+                    }
                 }
             }
         }
@@ -245,7 +246,7 @@ struct RootView: View {
                     // Any section can be moved into More, so any can be pushed here.
                     .navigationDestination(for: AppSection.self) { content($0).tvDefaultControls() }
             }
-            .environment(\.openRoute) { morePath.append($0) }
+            .environment(\.openRoute, RouteOpener { morePath.append($0) })
         } else { RouteStack { content(item).tvDefaultControls() } }
     }
 
@@ -291,6 +292,7 @@ struct RootView: View {
     @ViewBuilder private func sectionRoot(_ section: AppSection) -> some View {
         switch section {
         case .home: HomeView()
+        case .discover: DiscoverView()
         case .search: GlobalSearchView()
         case .live: LiveView()
         case .music: MusicView()
@@ -319,7 +321,7 @@ struct RootView: View {
 /// tvOS 17's More tab: the sections that did not fit in its tab bar.
 private struct TVMoreView: View {
     let sections: [AppSection]
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         List(sections) { section in
             NavigationLink(value: section) { Label(section.title, systemImage: section.icon) }
         }
@@ -328,7 +330,7 @@ private struct TVMoreView: View {
         .frame(maxWidth: .infinity)
         .background { Backdrop() }
         .navigationTitle(AppSection.more.title)
-    }
+    } }
 }
 #endif
 
@@ -346,30 +348,26 @@ private struct PlayerPresentation: ViewModifier {
     #if os(macOS)
     @State private var playerWindow = PlayerWindowController()
     #endif
-    func body(content: Content) -> some View {
-        AppPerceptionTracking {
-            #if os(macOS)
-            content.onChange(of: playing, initial: true) { _, channel in
-                if let channel {
-                    playerWindow.present(channel, store: store) { playing = nil }
-                } else {
-                    playerWindow.close()
-                }
+    func body(content: Content) -> some View { AppPerceptionTracking {
+        #if os(macOS)
+        content.onChangeCompat(of: playing, initial: true) { _, channel in
+            if let channel {
+                playerWindow.present(channel, store: store) { playing = nil }
+            } else {
+                playerWindow.close()
             }
-            #else
-            // One presentation while anything plays: the next episode replaces the channel inside the player.
-            // Keyed by the channel, every change dismissed the player and presented a new one, so even a
-            // queued episode would stop and load.
-            // An iPhone watch page plays its own video at the top of the page (`VideoDetailView`).
-            content.fullScreenCover(item: Binding(get: { store.playsInWatchPage(playing) ? nil : playing.map(PlayerSlot.init) },
-                                                  set: { if $0 == nil, !store.playsInWatchPage(playing) { playing = nil } })) { slot in
-                AppPerceptionTracking {
-                    PlaybackView(channel: slot.channel)
-                }
-            }
-            #endif
         }
-    }
+        #else
+        // One presentation while anything plays: the next episode replaces the channel inside the player.
+        // Keyed by the channel, every change dismissed the player and presented a new one, so even a
+        // queued episode would stop and load.
+        // An iPhone watch page plays its own video at the top of the page (`VideoDetailView`).
+        content.fullScreenCover(item: Binding(get: { store.playsInWatchPage(playing) ? nil : playing.map(PlayerSlot.init) },
+                                              set: { if $0 == nil, !store.playsInWatchPage(playing) { playing = nil } })) {
+            PlaybackView(channel: $0.channel)
+        }
+        #endif
+    } }
 }
 
 #if os(macOS)
@@ -378,16 +376,17 @@ private struct MacSidebar: View {
     @Environment(Store.self) private var store
     @Environment(Updates.self) private var updates
     private var groups: [(title: String, items: [AppSection])] {
-        let groups: [(title: String, items: [AppSection])] = [(L10n.text("Browse"), [.home, .search, .live, .music, .sites, .files]),
+        let groups: [(title: String, items: [AppSection])] = [(L10n.text("Browse"), [.home, .discover, .search, .live, .music, .sites, .files]),
                                                              (L10n.text("Library"), [.history, .favorites, .downloads, .settings])]
         return groups.map { (title: $0.title, items: $0.items.filter { !store.hiddenSections.contains($0) }) }
     }
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         let ordered = groups.flatMap(\.items)
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 ForEach(groups, id: \.title) { group in
+                    AppPerceptionTracking {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(group.title)
                             .font(.system(size: 11, weight: .semibold))
@@ -395,12 +394,15 @@ private struct MacSidebar: View {
                             .padding(.horizontal, 10).padding(.bottom, 4)
                             .accessibilityAddTraits(.isHeader)
                         ForEach(group.items) { item in
+                            AppPerceptionTracking {
                             SidebarRow(section: item, selected: store.section == item,
                                        badge: item.showsUpdateBadge && !updates.available.isEmpty,
                                        shortcut: (ordered.firstIndex(of: item).map { $0 + 1 }).flatMap { $0 < 10 ? Character(String($0)) : nil }) {
                                 store.section = item
                             }
+                            }
                         }
+                    }
                     }
                 }
             }
@@ -408,7 +410,7 @@ private struct MacSidebar: View {
         }
         .scrollIndicators(.never)
         .safeAreaInset(edge: .bottom, spacing: 0) { SidebarStatus() }
-    }
+    } }
 }
 
 private struct SidebarRow: View {
@@ -420,7 +422,7 @@ private struct SidebarRow: View {
     let action: () -> Void
     @State private var hovering = false
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         Button(action: action) {
             HStack(spacing: 10) {
                 Image(systemName: section.icon)
@@ -447,7 +449,7 @@ private struct SidebarRow: View {
         .animation(.smooth(duration: 0.15), value: hovering)
         .keyboardShortcut(shortcut.map { KeyboardShortcut(KeyEquivalent($0), modifiers: .command) })
         .accessibilityAddTraits(selected ? [.isSelected] : [])
-    }
+    } }
 }
 #endif
 
@@ -460,7 +462,7 @@ struct SidebarStatus: View {
         let text = L10n.text("Version %@", short)
         return build.isEmpty || build == short ? text : "\(text) (\(build))"
     }
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         if let version {
             Text(version)
                 .font(.caption).monospacedDigit().foregroundStyle(.tertiary).lineLimit(1)
@@ -469,7 +471,7 @@ struct SidebarStatus: View {
                 .overlay(alignment: .top) { Divider().padding(.horizontal, 12) }
                 .selectable()
         }
-    }
+    } }
 }
 
 /// A pushed page carried as a navigation-path value. View-destination `NavigationLink`s are not
@@ -486,37 +488,83 @@ struct Route: Hashable, @unchecked Sendable {
 struct RouteLink<Label: View>: View {
     private let route: Route
     private let label: Label
+    #if os(macOS)
+    @Environment(\.stripDrag) private var drag
+    @Environment(\.openRoute) private var openRoute
+    #endif
     init<Destination: View>(@ViewBuilder destination: @escaping @MainActor () -> Destination, @ViewBuilder label: () -> Label) {
         route = Route { AnyView(destination()) }
         self.label = label()
     }
-    var body: some View { NavigationLink(value: route) { label } }
+    var body: some View { AppPerceptionTracking {
+        #if os(macOS)
+        // In a strip the link under the pointer gets the mouse-up that ends a drag, which must not open it.
+        if let drag, let openRoute {
+            Button { if !drag.active { openRoute(route) } } label: { label }
+        } else {
+            NavigationLink(value: route) { label }
+        }
+        #else
+        NavigationLink(value: route) { label }
+        #endif
+    } }
 }
 
 extension EnvironmentValues {
     /// Pushes a page onto the enclosing stack's path. A page opened with `navigationDestination(item:)` is not on the
     /// path, so a `RouteLink` on it pushed underneath it: the new page only showed after Back.
-    @Entry var openRoute: ((Route) -> Void)? = nil
+    @Entry var openRoute: RouteOpener? = nil
 }
 
 /// A tab's stack, with its own path so pages can be pushed from code (`openRoute`).
 private struct RouteStack<Root: View>: View {
-    @State private var path = NavigationPath()
+    @State private var stack = RoutePath()
     private let root: Root
     init(@ViewBuilder root: () -> Root) { self.root = root() }
-    var body: some View {
-        NavigationStack(path: $path) { root.routeDestinations() }
-            .environment(\.openRoute) { path.append($0) }
-    }
+    var body: some View { AppPerceptionTracking {
+        @AppBindable var stack = stack
+        NavigationStack(path: $stack.path) { root.routeDestinations() }
+            .environment(\.openRoute, stack.opener)
+    } }
+}
+
+/// A stack's path, and the one `openRoute` that pushes onto it for the stack's whole life.
+@MainActor @Perceptible private final class RoutePath {
+    var path = NavigationPath()
+    @PerceptionIgnored private(set) lazy var opener = RouteOpener { [weak self] in self?.path.append($0) }
+}
+
+/// Pushes a page onto a stack's path (`openRoute`). An object rather than a closure: SwiftUI can't compare closures,
+/// so one in the environment was a new value on every update and every pushed page updated with it. On tvOS 27 an
+/// alert or sheet over a pushed page then kept the stack updating forever and froze the app (#272).
+@MainActor final class RouteOpener {
+    private let push: @MainActor (Route) -> Void
+    init(_ push: @escaping @MainActor (Route) -> Void) { self.push = push }
+    func callAsFunction(_ route: Route) { push(route) }
 }
 
 extension View {
     /// Registers `Route` pages; apply once at the root of every NavigationStack.
     func routeDestinations() -> some View {
-        #if os(macOS)
-        navigationDestination(for: Route.self) { $0.build().musicBar() }
+        #if os(macOS) || os(tvOS)
+        modifier(MacRouteDestinations())
         #else
         navigationDestination(for: Route.self) { route in AppPerceptionTracking { route.build() } }
         #endif
     }
 }
+
+#if os(macOS) || os(tvOS)
+/// Pushed pages get `openRoute` too: the environment set on the detail stack reaches its root page, not the pages its
+/// destinations build, so a page opened from code (Discover's search, a person from it) pushed nothing.
+private struct MacRouteDestinations: ViewModifier {
+    @Environment(\.openRoute) private var openRoute
+    func body(content: Content) -> some View { AppPerceptionTracking {
+        #if os(macOS)
+        content.navigationDestination(for: Route.self) { $0.build().musicBar().environment(\.openRoute, openRoute) }
+        #else
+        content.navigationDestination(for: Route.self) { $0.build().environment(\.openRoute, openRoute) }
+        #endif
+    } }
+}
+#endif

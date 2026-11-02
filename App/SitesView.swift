@@ -3,6 +3,13 @@ import TVCore
 
 struct SitesView: View {
     @Environment(Store.self) private var store
+    @Environment(\.dismiss) private var dismiss
+    /// Choosing a source for something else (Watch Now's recommendations): only `pickable` sources are listed, the
+    /// `picked` one is checked, and Select hands the source back and returns instead of opening it.
+    var pick: ((Site) -> Void)? = nil
+    var pickable: [Site] = []
+    var picked: String? = nil
+    @FocusState private var focusedSite: String?
     @State private var query = ""
     /// Groups the viewer folded. Every group starts open, subscriptions and hidden sources included,
     /// so nothing on the page needs finding. Reset with the page, not with a pushed source: the state
@@ -15,13 +22,61 @@ struct SitesView: View {
     var body: some View { AppPerceptionTracking {
         Group {
             if let config = store.subscription {
-                sitesScroll(config)
-            } else {
-                AppContentUnavailableView(L10n.text("No Sources Yet"), systemImage: "square.grid.2x2", description: Text(L10n.text("Add a TVBox subscription in Settings.")))
-            }
+                let groups = store.sourceGroups(includeHidden: false).filtered(by: query).limited(to: pick == nil ? nil : Set(pickable.map(\.key)))
+                let sites = store.orderedSites(config)
+                let customOrderEnabled = store.sourceOrder.enabled
+                ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: Layout.cardSpacing) {
+                        if pick == nil, query.isEmpty && sites.count > 1 {
+                            SourceOrderCard(sites: sites) { arranging = true }.tvFocusSection()
+                        }
+                        ForEach(groups) { group in
+                            groupHeader(group)
+                            if !collapsed.contains(group.id) {
+                                LazyVGrid(columns: Layout.cardColumns, spacing: Layout.cardSpacing) {
+                                    ForEach(group.sites) { site in
+                                        if let pick {
+                                            Button { pick(site); dismiss() } label: { SiteCard(site: site, chosen: site.key == picked) }.tileButton()
+                                                .accessibilityAddTraits(site.key == picked ? .isSelected : [])
+                                                .focused($focusedSite, equals: site.key)
+                                                .id(site.key)
+                                        } else {
+                                        RouteLink { SiteView(site: site, origin: config.origin, jarURL: config.spiderURL) } label: { SiteCard(site: site, dimmed: group.kind == .hidden) }.tileButton()
+                                            .contextMenu {
+                                                PinSourceButton(site: site, origin: config.origin)
+                                                HideSourceButton(site: site, origin: config.origin)
+                                                if customOrderEnabled { MoveSourceButtons(site: site, sites: sites) }
+                                            }
+                                        }
+                                    }
+                                }
+                                // Unfolds from under its header; folding only fades, as the groups below slide up.
+                                .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: -16)), removal: .opacity))
+                            }
+                        }
+                    }.pageContainer()
+                }
+                // Picking opens on the current choice rather than the top of a long page.
+                .defaultFocusCompat($focusedSite, picked)
+                .onAppear { if pick != nil, let picked { proxy.scrollTo(picked, anchor: .center) } }
+                }
+                .sheet(isPresented: $arranging) { AppPerceptionTracking { SourceOrderEditor(sites: sites, automatic: store.automaticSites(config)) } }
+                #if DEBUG
+                // `-qaArrangeSources 1` opens the editor for screenshots.
+                .task {
+                    guard UserDefaults.standard.bool(forKey: "qaArrangeSources") else { return }
+                    store.setCustomSourceOrder(true)
+                    // Let launch settle first: on tvOS a sheet asked for straight away never appeared.
+                    try? await Task.sleep(for: .seconds(2))
+                    arranging = true
+                }
+                #endif
+            } else { AppContentUnavailableView(L10n.text("No Sources Yet"), systemImage: "square.grid.2x2", description: Text(L10n.text("Add a TVBox subscription in Settings."))) }
         }
         .screenBackdrop()
-        .catalogSearchable(text: $query, prompt: L10n.text("Find a source")).tabTitle(L10n.text("Sources"))
+        .catalogSearchable(text: $query, prompt: L10n.text("Find a source"))
+        .modifier(SitesTitle(picking: pick != nil))
         .task(id: store.section) {
             if store.section == .sites && !prepared {
                 applyDefaultFold()
@@ -41,52 +96,6 @@ struct SitesView: View {
             }
         }
     } }
-
-    private func sitesScroll(_ config: Subscription) -> some View {
-        let groups = store.sourceGroups(includeHidden: false).filtered(by: query)
-        let sites = store.orderedSites(config)
-        let customOrderEnabled = store.sourceOrder.enabled
-        return ScrollView {
-            LazyVStack(alignment: .leading, spacing: Layout.cardSpacing) {
-                if query.isEmpty && sites.count > 1 {
-                    SourceOrderCard(sites: sites) { arranging = true }.tvFocusSection()
-                }
-                ForEach(groups) { group in
-                    groupHeader(group)
-                    if !collapsed.contains(group.id) {
-                        LazyVGrid(columns: Layout.cardColumns, spacing: Layout.cardSpacing) {
-                            ForEach(group.sites) { site in
-                                RouteLink { SiteView(site: site, origin: config.origin, jarURL: config.spiderURL) } label: { SiteCard(site: site, dimmed: group.kind == .hidden) }.tileButton()
-                                    .contextMenu {
-                                        PinSourceButton(site: site, origin: config.origin)
-                                        HideSourceButton(site: site, origin: config.origin)
-                                        if customOrderEnabled { MoveSourceButtons(site: site, sites: sites) }
-                                    }
-                            }
-                        }
-                        // Unfolds from under its header; folding only fades, as the groups below slide up.
-                        .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: -16)), removal: .opacity))
-                    }
-                }
-            }.pageContainer()
-        }
-        .sheet(isPresented: $arranging) {
-            AppPerceptionTracking {
-                SourceOrderEditor(sites: sites, automatic: store.automaticSites(config))
-            }
-        }
-        #if DEBUG
-        // `-qaArrangeSources 1` opens the editor for screenshots.
-        .task {
-            guard UserDefaults.standard.bool(forKey: "qaArrangeSources") else { return }
-            store.setCustomSourceOrder(true)
-            // Let launch settle first: on tvOS a sheet asked for straight away never appeared.
-            try? await Task.sleep(for: .seconds(2))
-            arranging = true
-        }
-        #endif
-    }
-
     @ViewBuilder
     private func groupHeader(_ group: SourceGroup) -> some View {
         let open = !collapsed.contains(group.id)
@@ -132,7 +141,25 @@ struct SitesView: View {
     }
 }
 
+/// The Sources tab names itself in the sidebar; a page pushed to pick a source says what is being chosen.
+private struct SitesTitle: ViewModifier {
+    let picking: Bool
+    func body(content: Content) -> some View {
+        if picking { content.screenTitle(L10n.text("Recommendation Source")) } else { content.tabTitle(L10n.text("Sources")) }
+    }
+}
+
 private extension Array where Element == SourceGroup {
+    /// Only these sources, when given; groups left empty drop out.
+    func limited(to keys: Set<String>?) -> [SourceGroup] {
+        guard let keys else { return self }
+        return compactMap { group in
+            var kept = group
+            kept.sites = group.sites.filter { keys.contains($0.key) }
+            return kept.sites.isEmpty ? nil : kept
+        }
+    }
+
     /// Sites whose name contains the query, ignoring case; groups left empty drop out.
     func filtered(by query: String) -> [SourceGroup] {
         guard !query.isEmpty else { return self }
@@ -199,6 +226,8 @@ struct SiteCard: View {
     var dimmed = false
     /// The pin badge on the icon; off in Watch Now's Pinned Sources, where every card is pinned.
     var marksPinned = true
+    /// Whether this is the source currently chosen, when picking one (`SitesView.pick`); nil when not picking.
+    var chosen: Bool? = nil
     #if os(tvOS)
     private var focused: Bool { isFocused }
     private let icon: CGFloat = 88, padding: CGFloat = 20, radius: CGFloat = 28
@@ -238,8 +267,12 @@ struct SiteCard: View {
                 }
             }
             Spacer(minLength: 0)
+            if chosen == true {
+                Image(systemName: "checkmark.circle.fill").font(.title2).foregroundStyle(focused ? Color.black : Brand.accent)
+                    .accessibilityHidden(true)
+            }
             #if !os(tvOS)
-            Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+            if chosen == nil { Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary) }
             #endif
         }
         .padding(padding).frame(maxWidth: .infinity, alignment: .leading)
@@ -247,7 +280,6 @@ struct SiteCard: View {
         .accessibilityElement(children: .combine)
         .opacity(dimmed ? 0.45 : 1)
     } }
-
     /// Which engine runs a source is an implementation detail; only built-in sources say so.
     private var engine: String? { site.isBuiltIn ? L10n.text("Built-in") : nil }
 }
@@ -609,7 +641,6 @@ struct SourceOrderEditor: View {
         #endif
         #endif
     } }
-
     #if os(tvOS)
     private func move(_ site: Site, to offset: Int) {
         guard let index = sites.firstIndex(where: { $0.id == site.id }) else { return }
@@ -628,6 +659,8 @@ struct SiteView: View {
     var initialQuery: String = ""
     /// A drive source's folder: the page lists it in place of the source's home.
     var folder: Video? = nil
+    /// The source's home as another page already has it (Watch Now's recommendations): shown at once, then refreshed.
+    var preview: (videos: [Video], categories: [TVCore.Category])? = nil
     private var canLoad: Bool { site.canBrowse(jarURL: jarURL) }
     private var isIndex: Bool { (site.raw["indexs"]?.int ?? 0) == 1 }
     @State private var browser = CatalogBrowser()
@@ -702,7 +735,7 @@ struct SiteView: View {
                             )
                             .padding(.vertical, videos.isEmpty ? 24 : 8)
                         }
-                        if videos.isEmpty && loaded && !busy && error == nil { AppContentUnavailableView(L10n.text("No Videos"), systemImage: "film", description: Text(L10n.text("Try selecting a category or searching."))).frame(maxWidth: .infinity) }
+                        if videos.isEmpty && loaded && !busy && error == nil { EmptyResults(symbol: "film", title: L10n.text("No Videos"), message: L10n.text("Try selecting a category or searching.")) }
                         LazyVGrid(columns: Layout.posterColumns, spacing: Layout.gridRowSpacing) {
                             ForEach(videos) { video in
                                 // An index source (a ranking or list site) names titles; other sources play them.
@@ -741,6 +774,7 @@ struct SiteView: View {
         }
         .screenTitle(folder?.name ?? site.name).task {
             store.searchModel.suspend()
+            if let preview, folder == nil, initialQuery.isEmpty { browser.seed(videos: preview.videos, categories: preview.categories) }
             if canLoad && !browser.loaded {
                 if browser.request != .home {
                     await browser.load(browser.request, client: client)
@@ -850,11 +884,16 @@ struct VideoDetailView: View {
     @State private var containerWidth: CGFloat = 0
     /// The cover's width over height once it loads; landscape covers are common (Bilibili, short dramas).
     @State private var artAspect: CGFloat?
+    /// TMDB's backdrop once its picture has loaded. The source's cover stays until then, and when it never does
+    /// (image.tmdb.org is blocked on some networks, #237).
+    @State private var loadedBackdrop: URL?
     /// The episode whose playback is being prepared; its row and the Play button show progress.
     @State private var loadingEpisode: Episode.ID?
     /// A failed or blocked playback attempt, shown as an inline banner beside the artwork.
     @State private var playbackIssue: PlaybackIssue?
     @State private var signingIn: CloudDrive?
+    /// A sign-in the source's CatPawOpen bundle runs itself (UC's TV token).
+    @State private var bundleSignIn: BundleSignIn?
     @State private var choosingDownloads = false
     /// How many episodes were just queued, shown briefly under the header.
     @State private var queuedNotice: Int?
@@ -907,16 +946,16 @@ struct VideoDetailView: View {
         .screenTitle(video.name).task {
             store.searchModel.suspend()
             #if os(iOS)
-            // The watch page plays at once: where the viewer stopped (from Continue Watching, or watched before),
-            // which resolves its own details, or else the first episode once the details are in.
+            // From Continue Watching the watch page resumes at once, resolving its own details.
             let continues = watchLayout && watchChannel == nil && store.resumingHistoryID == nil
-            let entry = continues ? resume ?? watchHistory : nil
-            if let entry { store.resume(entry) }
+            if continues, let resume { store.resume(resume) }
             #endif
             if detail == nil { await loadDetail() }
             #if os(iOS)
-            if continues, entry == nil, watchChannel == nil, let first = activeEpisodes.first {
-                startRequest { await play(first) }
+            // A video of one episode then plays by itself, from where the viewer stopped if watched before. One of
+            // several waits on its cover for the viewer to choose the line and episode (#260).
+            if continues, resume == nil, watchChannel == nil, store.resumingHistoryID == nil, activeEpisodes.count <= 1 {
+                playWatchCover()
             }
             #endif
             #if DEBUG
@@ -928,10 +967,20 @@ struct VideoDetailView: View {
         .task(id: detail?.id) { await startTMDB() }
         .onChangeCompat(of: choosingQuality) { _, open in if !open && !busy { loadingEpisode = nil } }
         // Sign in where playback failed, then resume the episode that needed the account.
+        #if !os(tvOS)
+        .sheet(item: $bundleSignIn) { pending in
+            CatPawSignInView(client: client, provider: pending.provider) {
+                if let episode = playbackIssue?.episode { startRequest { await play(episode) } }
+            }
+        }
+        #endif
         #if os(macOS)
         .sheet(item: $signingIn) { drive in
             if drive == .xunlei {
                 XunleiSignInView { if let episode = playbackIssue?.episode { startRequest { await play(episode) } } }
+            } else if drive == .baidu {
+                // Baidu signs in with a code to scan on a Mac, as in Settings.
+                CloudQRLoginView(drive: .baidu) { retryAfterSignIn() }
             } else {
                 CloudLoginView(provider: drive.provider) { cookie, ticket in
                     try await drive.provider.saveLogin(cookie, ticket: ticket)
@@ -971,7 +1020,6 @@ struct VideoDetailView: View {
             }
         }
     } }
-
     /// One page on Mac, iPad and Apple TV: the banner, the synopsis, the episodes, then TMDB's cast and facts. An episode
     /// rail beside the banner (once used for long lists, and always on Apple TV) squeezed the banner into a card.
     private var pageBody: some View {
@@ -1022,7 +1070,7 @@ struct VideoDetailView: View {
         }
         if let issue = playbackIssue {
             HStack(alignment: .top, spacing: 14) {
-                Image(systemName: issue.drive != nil ? "person.crop.circle.badge.exclamationmark.fill" : "exclamationmark.triangle.fill")
+                Image(systemName: issue.drive != nil || issue.signIn != nil ? "person.crop.circle.badge.exclamationmark.fill" : "exclamationmark.triangle.fill")
                     .font(.system(size: 16, weight: .semibold)).foregroundStyle(Brand.amber)
                     .frame(width: 36, height: 36)
                     .background(Brand.amber.opacity(0.15), in: Circle())
@@ -1038,10 +1086,17 @@ struct VideoDetailView: View {
                         if let drive = issue.drive {
                             Button(drive.signInTitle) { signingIn = drive }.settingsButton(prominent: true)
                         }
+                        #if !os(tvOS)
+                        if let provider = issue.signIn {
+                            Button(L10n.text("Get UC TV Token")) { bundleSignIn = BundleSignIn(provider: provider) }
+                                .settingsButton(prominent: true)
+                                .accessibilityIdentifier("playbackIssue.bundleSignIn")
+                        }
+                        #endif
                         Button(L10n.text(issue.blockedBeforeRequest ? "Try Anyway" : "Retry")) {
                             startRequest { await play(issue.episode, skipAccountCheck: true) }
                         }
-                        .settingsButton(prominent: issue.drive == nil)
+                        .settingsButton(prominent: issue.drive == nil && issue.signIn == nil)
                         #if os(tvOS)
                         // A focusable action instead of the small corner close button.
                         Button(L10n.text("Dismiss")) { withAnimation(.smooth(duration: 0.2)) { playbackIssue = nil } }.settingsButton()
@@ -1149,9 +1204,9 @@ struct VideoDetailView: View {
         min(max(containerWidth * 0.42, 280), 540)
         #endif
     }
-    /// TMDB's backdrop banner once the details are in, the source's cover and title until then.
+    /// TMDB's backdrop banner once its picture is in, the source's cover and title until then.
     @ViewBuilder private var tmdbHero: some View {
-        if let details = tmdb.details, let backdrop = details.backdrop {
+        if let details = tmdb.details, let backdrop = details.backdrop, backdrop == loadedBackdrop {
             let banner = TMDBBanner(details: details, backdrop: backdrop, unmatched: tmdb.answer?.unmatched ?? "") { playControl }
             banner.frame(height: bannerHeight).transition(.opacity)
         } else {
@@ -1310,7 +1365,7 @@ struct VideoDetailView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 18) {
             // TMDB's banner at any width, so a matched title's page looks the same everywhere.
-            if isWide || tmdb.details?.backdrop != nil {
+            if isWide || hasBackdrop {
                 tmdbHero
                 playbackBanner
                 tmdbStatus
@@ -1343,7 +1398,18 @@ struct VideoDetailView: View {
             }
         }
         .animation(.smooth(duration: 0.45), value: tmdb.details)
+        .animation(.smooth(duration: 0.45), value: loadedBackdrop)
         .animation(.smooth(duration: 0.3), value: tmdb.phase)
+        .task(id: tmdb.details?.backdrop) {
+            // Into TMDBArtwork's cache, so the banner shows it at once.
+            guard let backdrop = tmdb.details?.backdrop,
+                  await TMDBArtwork.load(backdrop, maxPixels: TMDBBannerMetrics.backdropPixels) != nil,
+                  !Task.isCancelled else { return }
+            loadedBackdrop = backdrop
+        }
+    }
+    private var hasBackdrop: Bool {
+        tmdb.details?.backdrop != nil && tmdb.details?.backdrop == loadedBackdrop
     }
     @ViewBuilder private var episodePanel: some View {
         if let detail {
@@ -1554,22 +1620,25 @@ struct VideoDetailView: View {
             store.playing = store.catalogChannel(resolved, video: currentVideo(), episode: episode, client: playback)
         } catch { fail(episode, error) }
     }
-    #if !os(macOS)
     private func retryAfterSignIn() {
         if let episode = playbackIssue?.episode { startRequest { await play(episode) } }
     }
-    #endif
     private func fail(_ episode: Episode, _ error: Error) {
         guard !Task.isCancelled, !(error is CancellationError) else { return }
+        let login = error as? CloudDriveLoginRequired ?? CloudDriveLoginRequired(bundleMessage: error.localizedDescription)
         // A drive that needs signing in is expected, not a failure to report.
-        if !(error is CloudDriveLoginRequired) {
+        if login == nil {
             Diagnostics.shared.failure("catalog", "play \(client.reportContext) flag=\(episode.flag)", error)
         }
         withAnimation(.smooth(duration: 0.25)) {
             // Plugins report a missing or expired drive login in their own words ("夸克授权失败，请扫码登录");
             // say what happened and offer the sign-in instead of echoing them.
-            if let login = error as? CloudDriveLoginRequired, let drive = CloudDrive(rawValue: login.rawValue) {
+            if let login, let drive = CloudDrive(rawValue: login.rawValue) {
                 playbackIssue = PlaybackIssue(episode: episode, message: drive.expiredHint, drive: drive, blockedBeforeRequest: false)
+            } else if let provider = CatPawSignIn.provider(for: error.localizedDescription) {
+                // Signed in, but the bundle wants a token its own code gives; signing in again would change nothing.
+                playbackIssue = PlaybackIssue(episode: episode, message: L10n.text("You're signed in to UC, but this source plays UC accounts without premium through UC's TV app, which needs a token of its own. Get it once with the UC Browser app, or choose another line."),
+                                              drive: nil, blockedBeforeRequest: false, signIn: provider)
             } else if let drive = CloudDrive(flag: episode.flag), CloudDrive.isLoginFailure(error.localizedDescription) {
                 playbackIssue = PlaybackIssue(episode: episode, message: drive.expiredHint, drive: drive, blockedBeforeRequest: false)
             } else {
@@ -1677,14 +1746,22 @@ struct VideoDetailView: View {
         if !entering { PlayerOrientation.set(landscape: false) } else if landscape { PlayerOrientation.set(landscape: true) }
     }
 
-    /// Before the picture: the cover across the top, blurred, while the page starts playing by itself. Play shows only
-    /// when that didn't happen (the episode failed, which the banner below explains).
+    /// The cover's Play: where the viewer stopped, else the line's first episode.
+    private func playWatchCover() {
+        if let watchHistory { store.resume(watchHistory); return }
+        guard let first = activeEpisodes.first ?? detail?.episodes.first else { return }
+        startRequest { await play(first) }
+    }
+
+    /// Before the picture: the cover across the top, blurred, while an episode starts. Otherwise (a video of several
+    /// episodes waiting for one to be chosen, or an episode that failed, which the banner below explains) the cover
+    /// shows clear, as Discover's page does, with Play.
     private var watchCover: some View {
         let starting = (detail == nil && error == nil) || busy || loadingEpisode != nil || store.resumingHistoryID != nil || watchChannel != nil
-        let first = activeEpisodes.first ?? detail?.episodes.first
+        let playable = watchHistory != nil || (activeEpisodes.first ?? detail?.episodes.first) != nil
         // The list's poster when there was one, so the picture doesn't change once the details arrive.
         let poster = video.poster != nil ? video : detail ?? video
-        return WatchCoverBackdrop(poster: poster.poster, headers: poster.posterHeaders, loading: starting) { coverStatus($0) }
+        return WatchCoverBackdrop(poster: poster.poster, headers: poster.posterHeaders, loading: starting, clear: !starting) { coverStatus($0) }
             .contentShape(Rectangle())
             .onTapGesture { if starting { withAnimation(.smooth(duration: 0.25)) { coverBack.toggle() } } }
             .task(id: coverBack) {
@@ -1693,8 +1770,8 @@ struct VideoDetailView: View {
                 if !Task.isCancelled { withAnimation(.smooth(duration: 0.3)) { coverBack = false } }
             }
             .overlay {
-                if !starting, let first {
-                    Button { startRequest { await play(first) } } label: {
+                if !starting, playable {
+                    Button { playWatchCover() } label: {
                         Image(systemName: "play.fill").font(.system(size: 22, weight: .semibold))
                             .frame(width: 58, height: 58)
                             .glassSurface(.regular.interactive(), in: Circle())
@@ -1746,6 +1823,8 @@ struct VideoDetailView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        // Its buttons are Liquid Glass, like the player's above them (#293).
+        .environment(\.glassControls, true)
         .animation(.smooth(duration: 0.45), value: tmdb.details)
         .animation(.smooth(duration: 0.3), value: tmdb.phase)
     }
@@ -1758,19 +1837,22 @@ struct VideoDetailView: View {
                 Text(L10n.text("No playable sources were found for this video.")).foregroundStyle(.secondary)
             } else {
                 let items = activeEpisodes
-                let compact = items.allSatisfy { EpisodeRow.title($0.name).count <= 5 }
+                let tile = compactTileWidth(items)
+                let compact = tile != nil
                 let stills = watchStills(items)
                 VStack(alignment: .leading, spacing: 12) {
                     if items.count > 1 {
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
                             Text(L10n.text("Episodes")).font(.headline)
                             Text("\(items.count)").font(.subheadline).monospacedDigit().foregroundStyle(.secondary)
-                            episodeOrderButton
+                            episodeOrderButton.glassOrFill(.regular.interactive(), Color.clear, in: Circle())
                             Spacer(minLength: 8)
                             if items.count > (compact ? 5 : 2) {
                                 Button { showsAllEpisodes = true } label: {
                                     HStack(spacing: 3) { Text(L10n.text("All")); Image(systemName: "chevron.right").font(.caption.weight(.semibold)) }
                                         .font(.subheadline).foregroundStyle(.secondary)
+                                        .padding(.horizontal, 12).frame(minHeight: 32)
+                                        .glassOrFill(.regular.interactive(), Color.clear, in: Capsule())
                                         .frame(minHeight: 44).contentShape(Rectangle())
                                 }
                                 .buttonStyle(.plain)
@@ -1789,7 +1871,7 @@ struct VideoDetailView: View {
                                 AppPerceptionTracking {
                                     ForEach(shownOrder(items)) { episode in
                                         AppPerceptionTracking {
-                                            watchEpisodeCard(episode, compact: compact, info: stills[episode.id])
+                                            watchEpisodeCard(episode, tile: tile, info: stills[episode.id])
                                         }
                                     }
                                 }
@@ -1799,6 +1881,7 @@ struct VideoDetailView: View {
                         }
                         .scrollIndicators(.never)
                         .scrollPositionCompat(id: $episodeScroll, anchor: .center)
+                        .scrollClipDisabledCompat()
                         .padding(.horizontal, -16)
                         .onAppear { episodeScroll = currentEpisodeID }
                         .onChangeCompat(of: currentEpisodeID) { _, id in if let id { withAnimation { episodeScroll = id } } }
@@ -1818,6 +1901,9 @@ struct VideoDetailView: View {
                 let same = episodes.first { $0.flag == flag && $0.name == playing?.name } ?? episodes.first { $0.flag == flag }
                 if let same, same.id != currentEpisodeID { startRequest { await play(same) } }
             }
+            // Edge to edge and unclipped, like the episodes, so the strip doesn't cut the chips' glass shadow (#293).
+            .horizontalScrollContentMargins(16).scrollClipDisabledCompat()
+            .padding(.horizontal, -16)
         }
     }
 
@@ -1828,10 +1914,30 @@ struct VideoDetailView: View {
         return items.count > 1 && stills.values.filter { $0.still != nil }.count * 2 >= items.count ? stills : [:]
     }
 
+    /// The width of the small tiles when every name is short (第1集, 01, 4K国语), or nil for two-line cards. The tiles
+    /// are as wide as the widest name, at least 64 points: a fixed 64 cut off names of four or five characters such as
+    /// 4K国语 or 第100集 (#290). Measures one name, in the same pass that checks their lengths.
+    private func compactTileWidth(_ items: [Episode]) -> CGFloat? {
+        var widest = "", widestUnits = 0
+        for item in items {
+            let title = EpisodeRow.title(item.name)
+            guard title.count <= 5 else { return nil }
+            // Chinese and other wide characters take about twice the room of digits and Latin letters.
+            let units = title.unicodeScalars.reduce(0) { $0 + ($1.isASCII ? 1 : 2) }
+            if units > widestUnits { widest = title; widestUnits = units }
+        }
+        let font = UIFont.systemFont(ofSize: UIFont.preferredFont(forTextStyle: .subheadline).pointSize, weight: .semibold)
+        let text = (widest as NSString).size(withAttributes: [.font: font]).width
+        // 8 points of padding on each side, and a little room for the bold of the episode playing.
+        return max(64, (text + 20).rounded(.up))
+    }
+
     /// An episode: a small tile for short names (第1集, 01), a two-line card for long ones, TMDB's still above the name
-    /// when there is one. The one playing is tinted in the accent. There is no per-episode favorite on this page.
-    private func watchEpisodeCard(_ episode: Episode, compact: Bool, fill: Bool = false, info: TMDBMatch.EpisodeInfo? = nil,
+    /// when there is one. The one playing is filled with the accent, like the chosen line above it (#290). There is no
+    /// per-episode favorite on this page.
+    private func watchEpisodeCard(_ episode: Episode, tile: CGFloat?, fill: Bool = false, info: TMDBMatch.EpisodeInfo? = nil,
                                   chosen: (() -> Void)? = nil) -> some View {
+        let compact = tile != nil
         let current = episode.id == currentEpisodeID
         let saved = download(episode)
         let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -1852,11 +1958,13 @@ struct VideoDetailView: View {
                     .multilineTextAlignment(compact ? .center : .leading)
             }
             .font(.subheadline.weight(current ? .semibold : .regular))
-            .foregroundStyle(current ? Brand.accent : Color.primary)
+            .foregroundStyle(current ? Brand.onAccent : Color.primary)
+            .tint(current ? Brand.onAccent : nil)
             .padding(.horizontal, compact ? 8 : 12)
-            .frame(width: fill ? nil : compact ? 64 : 150, height: compact ? 44 : 54, alignment: compact ? .center : .leading)
+            .frame(width: fill ? nil : tile ?? 150, height: compact ? 44 : 54, alignment: compact ? .center : .leading)
             .frame(maxWidth: fill ? .infinity : nil, alignment: compact ? .center : .leading)
-            .background(current ? Brand.accent.opacity(0.14) : Color.primary.opacity(0.06), in: shape)
+            .glassOrFill(current ? GlassStyle.regular.tint(Brand.accent).interactive() : .regular.interactive(),
+                         current ? Brand.accent : Color.primary.opacity(0.06), in: shape)
             .overlay(alignment: .topTrailing) { if saved?.status == .completed { DownloadedBadge() } }
             .contentShape(shape)
             }
@@ -1880,18 +1988,18 @@ struct VideoDetailView: View {
 
     private var allEpisodes: some View {
         let items = activeEpisodes
-        let compact = items.allSatisfy { EpisodeRow.title($0.name).count <= 5 }
+        let tile = compactTileWidth(items)
         let stills = watchStills(items)
         return NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     watchLines
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: stills.isEmpty ? (compact ? 64 : 150) : 160), spacing: stills.isEmpty ? 8 : 12, alignment: .top)],
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: stills.isEmpty ? tile ?? 150 : 160), spacing: stills.isEmpty ? 8 : 12, alignment: .top)],
                               spacing: stills.isEmpty ? 8 : 14) {
                         AppPerceptionTracking {
                             ForEach(shownOrder(items)) { episode in
                                 AppPerceptionTracking {
-                                    watchEpisodeCard(episode, compact: compact, fill: true, info: stills[episode.id]) { showsAllEpisodes = false }
+                                    watchEpisodeCard(episode, tile: tile, fill: true, info: stills[episode.id]) { showsAllEpisodes = false }
                                 }
                             }
                         }
@@ -1906,6 +2014,7 @@ struct VideoDetailView: View {
                 ToolbarItem(placement: .confirmationAction) { Button(L10n.text("Done")) { showsAllEpisodes = false } }
             }
         }
+        .environment(\.glassControls, true)
         .presentationDetents([.medium, .large])
     }
     #endif
@@ -1980,13 +2089,21 @@ private struct PlaybackIssue {
     let drive: CloudDrive?
     /// True when playback was not attempted because a required account is missing.
     let blockedBeforeRequest: Bool
+    /// A sign-in the source's CatPawOpen bundle runs itself (`CatPawSignIn.provider(for:)`).
+    var signIn: String? = nil
+}
+
+private struct BundleSignIn: Identifiable {
+    let provider: String
+    var id: String { provider }
 }
 
 /// Cloud drives whose plugins need a saved login before they can return a stream.
 private enum CloudDrive: String, Identifiable {
     /// Xunlei's sign-in is only for CatPawOpen bundles, which say when it is missing; other sources play their Xunlei
-    /// lines without it, so those lines are never held back for it.
-    case quark, uc, xunlei
+    /// lines without it, so those lines are never held back for it. Baidu comes only from a plugin's error
+    /// (`CloudDriveLoginRequired`), never from a line's name: other plugins sign in to it with their own code.
+    case quark, uc, xunlei, baidu
     var id: String { rawValue }
     /// FTY names its lines after drive nicknames: 夸父 is Quark, 优汐 is UC.
     init?(flag: String) {
@@ -2017,20 +2134,21 @@ private enum CloudDrive: String, Identifiable {
         case .quark: L10n.text("Quark")
         case .uc: "UC"
         case .xunlei: L10n.text("Xunlei")
+        case .baidu: L10n.text("Baidu Netdisk")
         }
     }
     var signInTitle: String {
         switch self {
         case .quark: L10n.text("Sign In to Quark")
         case .uc: L10n.text("Sign In to UC")
-        case .xunlei: L10n.text("Sign In to %@", name)
+        case .xunlei, .baidu: L10n.text("Sign In to %@", name)
         }
     }
     #if os(macOS)
     var provider: CloudProvider { self == .quark ? .quark : .uc }
     #else
-    var qrDrive: CloudDriveQRLogin.Drive { self == .quark ? .quark : .uc }
-    var webSignIn: WebSignIn { self == .quark ? .quark : .uc }
+    var qrDrive: CloudDriveQRLogin.Drive { self == .quark ? .quark : self == .baidu ? .baidu : .uc }
+    var webSignIn: WebSignIn { self == .quark ? .quark : self == .baidu ? .baidu : .uc }
     #endif
     var loginHint: String { L10n.text("This source plays from %@ and needs you to sign in first.", name) }
     var expiredHint: String { L10n.text("Your %@ sign-in is missing or has expired. Sign in again to play this episode.", name) }

@@ -16,12 +16,25 @@ public final class LazyDexArchive {
     private final List<Header> headers = new ArrayList<>();
     private final Map<String,Integer> indexes = new HashMap<>();
     private final Path folder;
+    /**
+     * dex2jar's output for each class, before `BytecodeCompatibility.rewrite`. It is keyed by
+     * DEX2JAR_VERSION only, so a host update that changes just the rewrite (most of them) re-runs
+     * that quick pass on these instead of converting every class from the DEX again.
+     */
+    private final Path checkpoints;
 
     public LazyDexArchive(String path, String cache) throws Exception {
+        this(path, Path.of(HostEnvironment.converted(Path.of(HostEnvironment.cache(cache),"converted").toString())));
+    }
+
+    /** An archive whose converted classes live in `converted` (the folder a runtime's loader would use). */
+    public LazyDexArchive(String path, Path converted) throws Exception {
         String hash = sha256(Path.of(path));
-        String fallback = Path.of(HostEnvironment.cache(cache),"converted").toString();
-        folder = Path.of(HostEnvironment.converted(fallback),hash+"."+BytecodeCompatibility.VERSION+"-lazy1");
+        folder = converted.resolve(hash+"."+BytecodeCompatibility.VERSION+"-lazy1");
+        checkpoints = converted.resolve(hash+"."+BytecodeCompatibility.DEX2JAR_VERSION);
         Files.createDirectories(folder);
+        Files.createDirectories(checkpoints);
+        forgetOtherVersions(converted, hash);
         reader = mapped(Path.of(path), folder);
         List<String> names = reader.getClassNames();
         for (int i=0;i<names.size();i++) indexes.put(names.get(i),i);
@@ -41,6 +54,37 @@ public final class LazyDexArchive {
             for (int count; (count = input.read(buffer)) > 0; ) digest.update(buffer, 0, count);
         }
         return HexFormat.of().formatHex(digest.digest());
+    }
+
+    /**
+     * Classes this archive converted under an earlier host version are never read again, and each
+     * version left a full copy behind. Remove them once nothing has changed in them for a day (a
+     * test build and the release app may take turns on one Mac), off the request's thread.
+     */
+    private static void forgetOtherVersions(Path converted, String hash) {
+        String current = hash + "." + BytecodeCompatibility.VERSION + "-lazy1", checkpoint = hash + "." + BytecodeCompatibility.DEX2JAR_VERSION;
+        List<Path> stale = new ArrayList<>();
+        try (var entries = Files.newDirectoryStream(converted, hash + ".*")) {
+            long cutoff = System.currentTimeMillis() - 24L * 3600 * 1000;
+            for (Path entry : entries) {
+                String name = entry.getFileName().toString();
+                if (name.equals(current) || name.equals(checkpoint) || !Files.isDirectory(entry, LinkOption.NOFOLLOW_LINKS)) continue;
+                if (!name.endsWith("-lazy1") && !name.startsWith(hash + ".dex2jar-")) continue;
+                if (Files.getLastModifiedTime(entry).toMillis() < cutoff) stale.add(entry);
+            }
+        } catch (java.io.IOException unreadable) { return; }
+        if (stale.isEmpty()) return;
+        Thread cleanup = new Thread(() -> {
+            for (Path folder : stale) {
+                try (var files = Files.walk(folder)) {
+                    for (Path file : files.sorted(Comparator.reverseOrder()).toList()) Files.deleteIfExists(file);
+                    System.err.println("DEX_CACHE_REMOVED " + folder.getFileName());
+                } catch (java.io.IOException | java.io.UncheckedIOException busy) { }
+            }
+        }, "converted-cleanup");
+        cleanup.setDaemon(true);
+        cleanup.setPriority(Thread.MIN_PRIORITY);
+        cleanup.start();
     }
 
     /**
@@ -118,6 +162,59 @@ public final class LazyDexArchive {
         });
     }
     public boolean contains(String name) { return indexes.containsKey("L"+name.replace('.','/')+";"); }
+    public int size() { return indexes.size(); }
+
+    /** Whether a request would load `name` from this archive without converting it. */
+    public boolean converted(String name) {
+        try { return verified(folder.resolve(classKey(name)+".jar")); }
+        catch (Exception unavailable) { return false; }
+    }
+
+    /**
+     * The archive's other classes that `name` names in its declaration or code (supertypes, and the
+     * owners and types its instructions use): what running it is likely to load next. Reads only this
+     * class from the DEX and converts nothing.
+     */
+    public List<String> references(String name) {
+        Integer index = indexes.get("L"+name.replace('.','/')+";");
+        if (index == null) return List.of();
+        Set<String> found = new LinkedHashSet<>();
+        java.util.function.Consumer<String> add = type -> {
+            if (type == null) return;
+            int start = 0;
+            while (start < type.length() && type.charAt(start) == '[') start++;
+            String element = type.substring(start);
+            if (indexes.containsKey(element)) found.add(element.substring(1, element.length() - 1).replace('/', '.'));
+        };
+        reader.accept(new DexFileVisitor() {
+            @Override public DexClassVisitor visit(int access, String className, String parent, String[] interfaces) {
+                add.accept(parent);
+                if (interfaces != null) for (String type : interfaces) add.accept(type);
+                return new DexClassVisitor() {
+                    @Override public DexMethodVisitor visitMethod(int accessFlags, com.googlecode.d2j.Method method) {
+                        return new DexMethodVisitor() {
+                            @Override public DexCodeVisitor visitCode() {
+                                return new DexCodeVisitor() {
+                                    @Override public void visitMethodStmt(com.googlecode.d2j.reader.Op op, int[] args, com.googlecode.d2j.Method target) { add.accept(target.getOwner()); }
+                                    @Override public void visitFieldStmt(com.googlecode.d2j.reader.Op op, int a, int b, com.googlecode.d2j.Field field) { add.accept(field.getOwner()); }
+                                    @Override public void visitTypeStmt(com.googlecode.d2j.reader.Op op, int a, int b, String type) { add.accept(type); }
+                                    @Override public void visitFilledNewArrayStmt(com.googlecode.d2j.reader.Op op, int[] args, String type) { add.accept(type); }
+                                    @Override public void visitConstStmt(com.googlecode.d2j.reader.Op op, int a, Object value) { if (value instanceof com.googlecode.d2j.DexType type) add.accept(type.desc); }
+                                    @Override public void visitTryCatch(com.googlecode.d2j.DexLabel start, com.googlecode.d2j.DexLabel end, com.googlecode.d2j.DexLabel[] handlers, String[] types) { if (types != null) for (String type : types) add.accept(type); }
+                                };
+                            }
+                        };
+                    }
+                };
+            }
+        }, index, DexFileReader.SKIP_DEBUG | DexFileReader.SKIP_ANNOTATION);
+        found.remove(name);
+        return new ArrayList<>(found);
+    }
+
+    private static String classKey(String name) throws Exception {
+        return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(name.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+    }
     /**
      * FileChannel and NIO writes are interruptible. Plugins interrupt their own worker threads
      * (timeouts, cancelled futures); a conversion that fails that way is cached by the JVM as a
@@ -141,12 +238,13 @@ public final class LazyDexArchive {
         String descriptor = "L"+name.replace('.','/')+";";
         Integer index = indexes.get(descriptor);
         if(index==null) throw new ClassNotFoundException(name);
-        String key = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(name.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        String key = classKey(name);
         Path result = folder.resolve(key+".jar");
         // Committed artifacts are immutable. Reusing one must not wait behind another
         // class's conversion, which takes seconds per class on the interpreter.
         if(verified(result)) {
             // Staging files of a completed class are leftovers from an interrupted rewrite.
+            // (Hosts before DEX2JAR_VERSION kept dex2jar's output here too.)
             for(String suffix:new String[]{".dex.tmp",".ready.tmp",".dex.jar"}) Files.deleteIfExists(folder.resolve(key+suffix));
             PreparationProgress.reused(1); return result;
         }
@@ -157,14 +255,15 @@ public final class LazyDexArchive {
             try(var channel=FileChannel.open(lockFile,StandardOpenOption.CREATE,StandardOpenOption.WRITE);var lock=channel.lock()) {
                 // All staging paths belong to this class and are protected by its lock.
                 // A killed process cannot leave a partial file that looks committed.
-                Path raw = folder.resolve(key+".dex.jar");
-                Path pending = folder.resolve(key+".dex.tmp");
+                // dex2jar's output is kept after the rewrite (see `checkpoints`).
+                Path raw = checkpoints.resolve(key+".dex.jar");
+                Path pending = checkpoints.resolve(key+".dex.tmp");
                 Path rewritten = folder.resolve(key+".ready.tmp");
                 Files.deleteIfExists(pending);
                 Files.deleteIfExists(rewritten);
+                Files.deleteIfExists(folder.resolve(key+".dex.jar"));
                 if(valid(result,name)) {
                     markVerified(result);
-                    Files.deleteIfExists(raw);
                     PreparationProgress.reused(1); return result;
                 }
                 PreparationProgress.converting();
@@ -192,15 +291,17 @@ public final class LazyDexArchive {
                         if(!valid(pending,name))throw new java.io.IOException("Conversion produced no class: "+name);
                         commit(pending,raw);
                     } else {
+                        // An earlier host version (or a run stopped before the rewrite) converted it already.
                         System.err.println("DEX_CLASS_RESUME "+name);
                     }
+                    long rewriteStart=System.nanoTime();
                     ConstructorRepair.with(this::declared, () -> { BytecodeCompatibility.rewrite(raw,rewritten,"tvbox/runtime/generated/InterfaceCalls_"+key); return null; });
                     if(!valid(rewritten,name))throw new java.io.IOException("Conversion produced no class: "+name);
                     commit(rewritten,result);
                     markVerified(result);
-                    Files.deleteIfExists(raw);
                     PreparationProgress.converted(1);
-                    System.err.printf("DEX_CLASS_READY %s %.3fs%n",name,(System.nanoTime()-start)/1e9);
+                    long end=System.nanoTime();
+                    System.err.printf("DEX_CLASS_READY %s %.3fs rewrite=%.3fs%n",name,(end-start)/1e9,(end-rewriteStart)/1e9);
                 } finally { Files.deleteIfExists(pending);Files.deleteIfExists(rewritten); }
                 return result;
             }

@@ -74,6 +74,7 @@ public struct CloudDriveAccounts: Codable, Sendable {
         #if os(tvOS)
         UserDefaults.standard.set(data, forKey: Self.defaultsKey)
         #endif
+        NotificationCenter.default.post(name: CloudFiles.drivesChanged, object: nil)
     }
     /// Changes whenever the saved accounts do; empty when nothing is saved.
     public static var revision: String {
@@ -96,6 +97,14 @@ public enum CloudDriveLoginRequired: String, LocalizedError, Sendable {
         guard envelope["errorCode"]?.string == "cloud_login_required",
               let drive = envelope["drive"]?.string else { return nil }
         self.init(rawValue: drive)
+    }
+
+    /// A CatPawOpen bundle without a Baidu sign-in sends the viewer to its config center, which runs on the device's
+    /// own address and can't be opened from another phone ("还没有配置百度网盘 Cookie，请先去配置中心登录百度网盘", #297).
+    /// The app's Baidu sign-in reaches the bundle on its next request (Runtime/NodeHost `shareAccounts`).
+    public init?(bundleMessage message: String) {
+        guard message.contains("百度网盘"), message.contains("配置中心") || message.localizedCaseInsensitiveContains("cookie") else { return nil }
+        self = .baidu
     }
 
     public func message(language: String? = nil) -> String {

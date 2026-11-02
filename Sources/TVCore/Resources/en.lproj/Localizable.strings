@@ -1,4 +1,7 @@
 // Shared UI and user-facing errors. English is the source language.
+"%@ hasn't turned on search. Its administrator can build the search index in AList's settings." = "%@ hasn't turned on search. Its administrator can build the search index in AList's settings.";
+"My %@" = "My %@";
+"This folder has no videos Apple devices can play." = "This folder has no videos Apple devices can play.";
 "Yingxia" = "Yingxia";
 "Yingxia / TVBOX" = "Yingxia / TVBOX";
 "Watch Now" = "Watch Now";
@@ -910,6 +913,18 @@
 "Your feedback becomes a public issue on Yingxia's GitHub page, with the app and system versions, the device model, the language and the included details. Please don't include accounts or passwords." = "Your feedback becomes a public issue on Yingxia's GitHub page, with the app and system versions, the device model, the language and the included details. Please don't include accounts or passwords.";
 "Included Details" = "Included Details";
 "Include Details" = "Include Details";
+"Add Photos or Videos" = "Add Photos or Videos";
+"Uploading…" = "Uploading…";
+"Uploading… %@" = "Uploading… %@";
+"Attach Diagnostic Log" = "Attach Diagnostic Log";
+"The diagnostic log goes to the developer only, not into the public issue. It helps find what went wrong." = "The diagnostic log goes to the developer only, not into the public issue. It helps find what went wrong.";
+"Pictures and videos you add appear in the public issue, without where they were taken." = "Pictures and videos you add appear in the public issue, without where they were taken.";
+"You can add up to %lld pictures or videos." = "You can add up to %lld pictures or videos.";
+"You've uploaded a lot of pictures and videos today. You can send more after %@." = "You've uploaded a lot of pictures and videos today. You can send more after %@.";
+"You've uploaded a lot of pictures and videos today. Please try again tomorrow." = "You've uploaded a lot of pictures and videos today. Please try again tomorrow.";
+"This file can't be added. Choose a picture or a video." = "This file can't be added. Choose a picture or a video.";
+"Videos can be up to %@. Choose a shorter one." = "Videos can be up to %@. Choose a shorter one.";
+"Pictures can be up to %@." = "Pictures can be up to %@.";
 "Your subscriptions and what you played lately help find the problem. Edit or remove anything you'd rather keep private." = "Your subscriptions and what you played lately help find the problem. Edit or remove anything you'd rather keep private.";
 "Thank You!" = "Thank You!";
 "Your feedback is now issue #%lld on GitHub." = "Your feedback is now issue #%lld on GitHub.";
@@ -961,10 +976,10 @@
 "Added %lld AList servers. Browse them in Cloud Files." = "Added %lld AList servers. Browse them in Cloud Files.";
 "This address is now an AList server. Add it again to browse it in Cloud Files." = "This address is now an AList server. Add it again to browse it in Cloud Files.";
 "Sign in to Quark or UC under Cloud Drive Accounts to browse their files here." = "Sign in to Quark or UC under Cloud Drive Accounts to browse their files here.";
-"Add an AList or OpenList server by the address you open it at. Pasting that address, or a TVBox AList configuration, in Add Subscription adds servers too." = "Add an AList or OpenList server by the address you open it at. Pasting that address, or a TVBox AList configuration, in Add Subscription adds servers too.";
+"Add an AList or OpenList server, a NAS's WebDAV share, or an Emby or Jellyfin server, by the address you open it at. Pasting an AList address, or a TVBox AList configuration, in Add Subscription adds servers too." = "Add an AList or OpenList server, a NAS's WebDAV share, or an Emby or Jellyfin server, by the address you open it at. Pasting an AList address, or a TVBox AList configuration, in Add Subscription adds servers too.";
 "Edit Server" = "Edit Server";
 "Remove Server" = "Remove Server";
-"Add AList Server" = "Add AList Server";
+"Add Server" = "Add Server";
 "Remove %@ from Cloud Files?" = "Remove %@ from Cloud Files?";
 "This Folder Is Empty" = "This Folder Is Empty";
 "Couldn't Open This Folder" = "Couldn't Open This Folder";
@@ -972,12 +987,12 @@
 "Password" = "Password";
 "Open" = "Open";
 "Enter the password for %@." = "Enter the password for %@.";
-"The address you open the server at in a browser, such as http://192.168.1.10:5244. Add a folder after it to start there. The user name and password are only for servers that don't let guests browse." = "The address you open the server at in a browser, such as http://192.168.1.10:5244. Add a folder after it to start there. The user name and password are only for servers that don't let guests browse.";
+"The server's address, such as http://192.168.1.10:5244 for AList, http://192.168.1.10:8096 for Emby or Jellyfin, or the WebDAV address your NAS shows. Add a folder after an AList or WebDAV address to start there. Emby and Jellyfin always want the user name; the others only when they don't let guests browse." = "The server's address, such as http://192.168.1.10:5244 for AList, http://192.168.1.10:8096 for Emby or Jellyfin, or the WebDAV address your NAS shows. Add a folder after an AList or WebDAV address to start there. Emby and Jellyfin always want the user name; the others only when they don't let guests browse.";
 "Address" = "Address";
 "Name (Optional)" = "Name (Optional)";
 "User Name (Optional)" = "User Name (Optional)";
 "Password (Optional)" = "Password (Optional)";
-"No AList server answered at this address." = "No AList server answered at this address.";
+"No AList, WebDAV, Emby or Jellyfin server answered at this address." = "No AList, WebDAV, Emby or Jellyfin server answered at this address.";
 "This server doesn't let guests browse. Enter a user name and password." = "This server doesn't let guests browse. Enter a user name and password.";
 "Sign in to Quark and UC on their official page. Yingxia stores the login on this Mac." = "Sign in to Quark and UC on their official page. Yingxia stores the login on this Mac.";
 "Sign in on the drive's own page, or scan a code with the drive's app on another phone. Yingxia keeps the sign-in on this device." = "Sign in on the drive's own page, or scan a code with the drive's app on another phone. Yingxia keeps the sign-in on this device.";
@@ -1122,6 +1137,174 @@
 "Ranked by commits in the last 30 days." = "Ranked by commits in the last 30 days.";
 "1 commit" = "1 commit";
 "%lld commits" = "%lld commits";
+
+// Discover catalog
+"Discover" = "Discover";
+"Trending This Week" = "Trending This Week";
+"In Theaters" = "In Theaters";
+"On the Air" = "On the Air";
+"Popular Animation" = "Popular Animation";
+"Popular Movies" = "Popular Movies";
+"Popular TV Shows" = "Popular TV Shows";
+"Top Rated Movies" = "Top Rated Movies";
+"Top Rated TV Shows" = "Top Rated TV Shows";
+"Coming Soon" = "Coming Soon";
+"Chinese TV Shows" = "Chinese TV Shows";
+"Korean TV Shows" = "Korean TV Shows";
+"Variety Shows" = "Variety Shows";
+"Popular Variety Shows" = "Popular Variety Shows";
+"Popular Chinese Dramas" = "Popular Chinese Dramas";
+"Search movies and TV shows" = "Search movies and TV shows";
+"Some lists couldn't load. Try again." = "Some lists couldn't load. Try again.";
+"No Titles Available" = "No Titles Available";
+"Please try again later." = "Please try again later.";
+"Search Sources" = "Search Sources";
+"View on TMDB" = "View on TMDB";
+"Search couldn't load. Please try again." = "Search couldn't load. Please try again.";
+"Action" = "Action";
+"Adventure" = "Adventure";
+"Animation" = "Animation";
+"Comedy" = "Comedy";
+"Crime" = "Crime";
+"Documentary" = "Documentary";
+"Drama" = "Drama";
+"Family" = "Family";
+"Fantasy" = "Fantasy";
+"Historical" = "Historical";
+"Horror" = "Horror";
+"Mystery" = "Mystery";
+"Romance" = "Romance";
+"Science Fiction" = "Science Fiction";
+"Thriller" = "Thriller";
+"War" = "War";
+"Western" = "Western";
+"Action & Adventure" = "Action & Adventure";
+"Kids" = "Kids";
+"News" = "News";
+"Reality" = "Reality";
+"Sci-Fi & Fantasy" = "Sci-Fi & Fantasy";
+"Talk" = "Talk";
+
+"Edit Layout" = "Edit Layout";
+"Featured Titles" = "Featured Titles";
+"Featured Collections" = "Featured Collections";
+"People" = "People";
+"Networks" = "Networks";
+"Browse by Genre" = "Browse by Genre";
+"Top Rated Collections" = "Top Rated Collections";
+"Film Studios" = "Film Studios";
+
+"Studios & Networks" = "Studios & Networks";
+
+"Stills" = "Stills";
+
+"Trailer Unavailable" = "Trailer Unavailable";
+
+"Crew" = "Crew";
+
+"Share" = "Share";
+
+"Overview" = "Overview";
+
+"Trailer" = "Trailer";
+
+"min" = "min";
+
+"Seasons" = "Seasons";
+
+"Genres" = "Genres";
+
+"Release Date" = "Release Date";
+
+"Country / Region" = "Country / Region";
+
+"Status" = "Status";
+
+"Returning Series" = "Returning Series";
+
+"Ended" = "Ended";
+
+"In Production" = "In Production";
+
+"Post Production" = "Post Production";
+
+"Planned" = "Planned";
+
+"Canceled" = "Canceled";
+
+"Rumored" = "Rumored";
+
+/* Discover catalog search */
+"Search Catalog" = "Search Catalog";
+"Movies, Series, People" = "Movies, Series, People";
+"Clear Search History" = "Clear Search History";
+"Recently Viewed" = "Recently Viewed";
+"Clear Recently Viewed" = "Clear Recently Viewed";
+"Discover More" = "Discover More";
+"Trending Today" = "Trending Today";
+"Popular" = "Popular";
+"Collapse" = "Collapse";
+"See All" = "See All";
+"Load More" = "Load More";
+"Try another title or change your filters." = "Try another title or change your filters.";
+"Couldn't Load Results" = "Couldn't Load Results";
+"Loading" = "Loading";
+"Filter" = "Filter";
+"Reset Filters" = "Reset Filters";
+"Keywords" = "Keywords";
+"Years" = "Years";
+"Sort By" = "Sort By";
+"Platform / Studio" = "Platform / Studio";
+"Region" = "Region";
+"Show Results" = "Show Results";
+"Release Year" = "Release Year";
+"From" = "From";
+"To" = "To";
+"Minimum Rating" = "Minimum Rating";
+"Minimum Votes" = "Minimum Votes";
+"Runtime (min)" = "Runtime (min)";
+"Find a keyword" = "Find a keyword";
+"Enter a valid range, from lowest to highest." = "Enter a valid range, from lowest to highest.";
+"Popularity ↓" = "Popularity ↓";
+"Popularity ↑" = "Popularity ↑";
+"Rating ↓" = "Rating ↓";
+"Rating ↑" = "Rating ↑";
+"Newest First" = "Newest First";
+"Oldest First" = "Oldest First";
+"Most Votes" = "Most Votes";
+"Highest Revenue" = "Highest Revenue";
+"Filmography" = "Filmography";
+"Soap" = "Soap";
+"War & Politics" = "War & Politics";
+"Acting" = "Acting";
+"Directing" = "Directing";
+"Writing" = "Writing";
+"Production" = "Production";
+
+/* Discover catalog search */
+"Movies" = "Movies";
+"Series" = "Series";
+"Content Type" = "Content Type";
+"Topics" = "Topics";
+
+"Any" = "Any";
+
+"Filter Type" = "Type";
+
+"Filter Genre" = "Genre";
+
+"Filtered Results" = "Filtered Results";
+
+"Actor" = "Actor";
+
+"%@s" = "%@s";
+
+"Language" = "Language";
+
+"Catalog Series" = "TV Shows";
+
+"TV Movie" = "TV Movie";
+
 "iCloud Sync" = "iCloud Sync";
 "Keeps favorites, Continue Watching, subscriptions, and the sources you pinned, hid or ordered the same on your devices signed in to the same iCloud account. Accounts, passwords and downloads stay on each device." = "Keeps favorites, Continue Watching, subscriptions, and the sources you pinned, hid or ordered the same on your devices signed in to the same iCloud account. Accounts, passwords and downloads stay on each device.";
 "Danmaku Area" = "Danmaku Area";
@@ -1133,3 +1316,37 @@
 "No Results for “%@”" = "No Results for “%@”";
 "Check the spelling or try a new search." = "Check the spelling or try a new search.";
 "Yingxia %@ is available upstream. iOS 16 requires a verified iOS 16-compatible build rather than the default iOS 17+ release package." = "Yingxia %@ is available upstream. iOS 16 requires a verified iOS 16-compatible build rather than the default iOS 17+ release package.";
+
+"UC TV Token" = "UC TV Token";
+"Get UC TV Token" = "Get UC TV Token";
+"You're signed in to UC, but this source plays UC accounts without premium through UC's TV app, which needs a token of its own. Get it once with the UC Browser app, or choose another line." = "You're signed in to UC, but this source plays UC accounts without premium through UC's TV app, which needs a token of its own. Get it once with the UC Browser app, or choose another line.";
+"Scan this code with the UC Browser app on your phone, signed in to the same UC account, and approve it." = "Scan this code with the UC Browser app on your phone, signed in to the same UC account, and approve it.";
+"Approve the token in the UC Browser app, signed in to the same UC account: open it here, or scan the code with UC Browser on another phone." = "Approve the token in the UC Browser app, signed in to the same UC account: open it here, or scan the code with UC Browser on another phone.";
+"Open in UC Browser" = "Open in UC Browser";
+"UC Browser isn't on this device. Get UC Browser (UC浏览器) from the App Store and sign in to it, or scan the code with another phone." = "UC Browser isn't on this device. Get UC Browser (UC浏览器) from the App Store and sign in to it, or scan the code with another phone.";
+"Waiting for UC Browser to approve…" = "Waiting for UC Browser to approve…";
+
+"%lld works" = "%lld works";
+
+"Contribution" = "Contribution";
+
+"Editing" = "Editing";
+
+"List View" = "List View";
+
+"Grid View" = "Grid View";
+
+"No works match these filters." = "No works match these filters.";
+
+"Show Video Info" = "Show Video Info";
+
+"Shows the video's format, resolution, frame rate and bitrate in a corner of the player." = "Shows the video's format, resolution, frame rate and bitrate in a corner of the player.";
+
+"Bitrate %@" = "Bitrate %@";
+
+"Download %@" = "Download %@";
+
+"Uses the official Dandanplay service. You can also enter your own compatible server." = "Uses the official Dandanplay service. You can also enter your own compatible server.";
+"This build is missing its Dandanplay API configuration." = "This build is missing its Dandanplay API configuration.";
+"Uses Dandanplay first, then tries iQIYI and Tencent Video if no comments are found or the service is unavailable. Official public episode pages are sent to dmku, or to danmu.zxz.ee when dmku has none; stream URLs and playback headers are never sent." = "Uses Dandanplay first, then tries iQIYI and Tencent Video if no comments are found or the service is unavailable. Official public episode pages are sent to dmku, or to danmu.zxz.ee when dmku has none; stream URLs and playback headers are never sent.";
+"Dandanplay has reached its request limit for now. Try again later, or choose another danmaku server." = "Dandanplay has reached its request limit for now. Try again later, or choose another danmaku server.";
