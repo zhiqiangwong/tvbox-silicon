@@ -47,7 +47,7 @@ struct PlaybackWaitView: View {
     @State private var drifting = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         GeometryReader { proxy in
             let picture = Self.picture(in: proxy.size)
             let layout = Self.layout(size: proxy.size, picture: picture)
@@ -71,7 +71,7 @@ struct PlaybackWaitView: View {
             withAnimation(.easeOut(duration: 0.6)) { poster = image }
             drifting = true
         }
-    }
+    } }
 
     /// Where the video will appear: 16:9, fitted and centred, as the players lay it out.
     static func picture(in size: CGSize) -> CGRect {
@@ -204,7 +204,7 @@ struct PlaybackWaitView: View {
                         ProgressView().controlSize(.small).tint(.white)
                         // A new message replaces the old with a soft blur rather than two lines crossing.
                         line(wait, inline: layout.inlineCaption).lineLimit(1)
-                            .id("\(wait.message)|\(wait.caption ?? "")|\(wait.suggestsLines)").transition(.blurReplace)
+                            .id("\(wait.message)|\(wait.caption ?? "")|\(wait.suggestsLines)").blurReplaceTransition()
                     }
                     .font(Self.pillFont)
                     .foregroundStyle(.white)
@@ -238,7 +238,7 @@ struct PlaybackWaitView: View {
 
     private func line(_ wait: PlaybackWait, inline: Bool) -> Text {
         guard inline, let caption = caption(wait) else { return Text(wait.message) }
-        return Text(wait.message) + Text("   ") + caption.font(Self.captionFont).foregroundStyle(.white.opacity(0.62))
+        return Text(wait.message) + Text("   ") + caption.font(Self.captionFont).foregroundColor(.white.opacity(0.62))
     }
 
     /// The second line: a note on a switch the player made, or the way to another line, shown with the button's symbol.
@@ -275,7 +275,7 @@ struct PlaybackWaitView: View {
 struct WaitDetails: View {
     var detail: String?
     var steps: [String] = []
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         VStack(spacing: 3) {
             if let detail { Text(detail).font(.caption.monospacedDigit()).foregroundStyle(.white.opacity(0.75)) }
             ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
@@ -285,13 +285,13 @@ struct WaitDetails: View {
         .lineLimit(1)
         .multilineTextAlignment(.center)
         .shadow(color: .black.opacity(0.45), radius: 6)
-    }
+    } }
 }
 
 /// A soft band of warm light that crosses the artwork every few seconds, as if the picture were developing.
 private struct LightSweep: View {
     private static let light = Color(red: 1, green: 0.93, blue: 0.83)
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         GeometryReader { proxy in
             // 30 frames a second is plenty for a slow band of light, and half the work of the display rate.
             TimelineView(.animation(minimumInterval: 1.0 / 30)) { timeline in
@@ -308,5 +308,5 @@ private struct LightSweep: View {
             }
         }
         .allowsHitTesting(false)
-    }
+    } }
 }

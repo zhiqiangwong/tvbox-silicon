@@ -17,25 +17,27 @@ struct HomeView: View {
     /// The first frame is only the section placeholders. The source row is built on the next turn, so the page can appear before that layout.
     @State private var settled = false
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         // The column width, not the placeholders' own width. A row of fixed cards is wider than the
         // detail column and NavigationSplitView then gives it that width, crushing the sidebar.
         GeometryReader { proxy in
             ScrollViewReader { reader in
-                ScrollView {
-                    Group {
-                        if let config = store.subscription, !settled, showsPlaceholder(config) {
-                            placeholders(config)
-                        } else {
-                            sections
+                AppPerceptionTracking {
+                    ScrollView {
+                        Group {
+                            if let config = store.subscription, !settled, showsPlaceholder(config) {
+                                placeholders(config)
+                            } else {
+                                sections
+                            }
                         }
+                        .pageContainer()
+                        .frame(width: proxy.size.width, alignment: .top)
                     }
-                    .pageContainer()
-                    .frame(width: proxy.size.width, alignment: .top)
+                    #if DEBUG
+                    .task { if let target = QALaunch.scrollTarget { try? await Task.sleep(for: .seconds(8)); reader.scrollTo(target, anchor: .bottom) } }
+                    #endif
                 }
-                #if DEBUG
-                .task { if let target = QALaunch.scrollTarget { try? await Task.sleep(for: .seconds(8)); reader.scrollTo(target, anchor: .bottom) } }
-                #endif
             }
         }
         .screenBackdrop()
@@ -55,7 +57,7 @@ struct HomeView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
-    }
+    } }
 
     /// A section that will be on the page once it is built. Empty data is skipped so a placeholder does not appear and then vanish.
     private func showsPlaceholder(_ config: Subscription) -> Bool {
@@ -138,7 +140,7 @@ struct HomeView: View {
             }
         }
         .padding(.horizontal, welcomeInset)
-        .containerRelativeFrame(.vertical, alignment: .center) { height, _ in height * 0.82 }
+        .verticalContainerRelativeFraction(0.82)
         #if os(tvOS)
         // Moving right out of the sidebar lands on the primary action, not the secondary one.
         .defaultFocus($primaryFocused, true, priority: .userInitiated)
@@ -227,7 +229,7 @@ struct HomeView: View {
 
     /// Every section switched off in Settings: say so, rather than leave a blank page.
     private var allHidden: some View {
-        ContentUnavailableView {
+        AppContentUnavailableView {
             Label(L10n.text("Watch Now"), systemImage: AppSection.home.icon)
         } description: {
             Text(L10n.text("Choose what Watch Now shows in Settings."))
@@ -238,10 +240,11 @@ struct HomeView: View {
     }
 
     private func pinnedSources(_ config: Subscription) -> some View {
-        VStack(alignment: .leading, spacing: Layout.headerSpacing) {
+        let pinned = store.orderedSites(config).filter { store.pinnedSources.contains($0, origin: config.origin) }
+        return VStack(alignment: .leading, spacing: Layout.headerSpacing) {
             SectionHeader(title: L10n.text("Pinned Sources")) { store.section = .sites }
             LazyVGrid(columns: Layout.cardColumns, spacing: Layout.cardSpacing) {
-                ForEach(store.orderedSites(config).filter { store.pinnedSources.contains($0, origin: config.origin) }) { site in
+                ForEach(pinned) { site in
                     RouteLink { SiteView(site: site, origin: config.origin, jarURL: config.spiderURL) } label: { SiteCard(site: site, marksPinned: false) }
                         .tileButton().contextMenu { PinSourceButton(site: site, origin: config.origin) }
                         .accessibilityIdentifier("home.pinned." + site.key)
@@ -290,14 +293,14 @@ struct HomeView: View {
 private struct FavoriteTile<Content: View>: View {
     @Environment(\.isFocused) private var focused
     @ViewBuilder let content: Content
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         content
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background { TileSurface(focused: focused, radius: 16) }
         // Primary and secondary text turn dark on the white plate.
         .environment(\.colorScheme, focused ? .light : .dark)
-    }
+    } }
 }
 #endif
 
@@ -313,13 +316,13 @@ private struct HomeFavoriteCard: View {
     #endif
     private static let posterWidth = thumb * 2 / 3
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         #if os(tvOS)
         tvBody
         #else
         cardBody
         #endif
-    }
+    } }
 
     #if os(tvOS)
     /// One focusable tile per favorite, lit up on focus like the source cards. A heart button beside the card's own focus
@@ -463,19 +466,19 @@ private struct HomeFavoriteCard: View {
 /// The app icon artwork, masked like a home-screen icon.
 struct AppMark: View {
     var size: CGFloat
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         Image("YingxiaLogo").resizable().interpolation(.high).scaledToFill()
             .frame(width: size, height: size)
             .clipShape(RoundedRectangle(cornerRadius: size * 0.225, style: .continuous))
             .shadow(color: Color(red: 0.1, green: 0.55, blue: 1).opacity(0.35), radius: size * 0.22, y: size * 0.06)
-    }
+    } }
 }
 
 /// Decorative poster tiles: staggered columns in the icon's blues, fading into the canvas.
 private struct PosterWall: View {
     private static let hues: [Color] = [Brand.cyan, Brand.indigo, Brand.teal, Brand.cyan.opacity(0.6)]
     private static let symbols = ["film", "sparkles.tv", "theatermasks", "music.note.tv", "popcorn", "star"]
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         GeometryReader { proxy in
             let spacing = proxy.size.width * 0.045
             let width = (proxy.size.width - spacing * 2) / 3
@@ -493,7 +496,7 @@ private struct PosterWall: View {
             // An ellipse that reaches clear at the frame's edges, so no tile meets a hard clip.
             .mask { EllipticalGradient(stops: [.init(color: .black, location: 0), .init(color: .black.opacity(0.75), location: 0.45), .init(color: .clear, location: 1)], endRadiusFraction: 0.5) }
         }
-    }
+    } }
 
     private func tile(_ index: Int, width: CGFloat) -> some View {
         let hue = Self.hues[index % Self.hues.count]
@@ -561,14 +564,14 @@ enum HomeSection: String, CaseIterable, Identifiable {
 
 /// Settings → Watch Now: which sections the page shows.
 struct WatchNowSettingsView: View {
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         SettingsPage(title: L10n.text("Watch Now"), symbol: AppSection.home.icon) {
             SettingsGroup(title: L10n.text("Show on Watch Now"),
                           footer: L10n.text("A section you switch off only leaves Watch Now: Playback History, Favorites, Sources and Live TV still have everything.")) {
                 ForEach(HomeSection.allCases) { HomeSectionToggle(section: $0) }
             }
         }
-    }
+    } }
 }
 
 /// One section's switch, stored under the section's own key.
@@ -579,7 +582,7 @@ private struct HomeSectionToggle: View {
         self.section = section
         _shown = AppStorage(wrappedValue: true, section.key)
     }
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         Group {
             #if os(tvOS)
             TVSettingsToggle(title: section.title, isOn: $shown)
@@ -589,5 +592,5 @@ private struct HomeSectionToggle: View {
             #endif
         }
         .accessibilityIdentifier("settings.home." + section.rawValue)
-    }
+    } }
 }

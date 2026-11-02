@@ -13,7 +13,10 @@ struct PhoneTabs: Equatable {
     static let wideBarSlots = 7
     /// The bar's places on a screen with these size classes.
     static func slots(horizontal: UserInterfaceSizeClass?, vertical: UserInterfaceSizeClass?) -> Int {
-        horizontal == .regular && vertical == .regular ? wideBarSlots : barSlots
+        if #available(iOS 17, *) {
+            return horizontal == .regular && vertical == .regular ? wideBarSlots : barSlots
+        }
+        return barSlots
     }
     static let standard = PhoneTabs(bar: [.home, .live, .music, .search], more: [.sites, .files, .history, .favorites, .downloads, .messages, .settings])
     var bar: [AppSection]
@@ -69,7 +72,7 @@ extension AppSection {
 struct SectionGlyph: View {
     let section: AppSection
     var size: CGFloat = 36
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         let tint = section.glyphTint
         Image(systemName: section.icon)
             .font(.system(size: size * 0.46, weight: .semibold))
@@ -78,13 +81,13 @@ struct SectionGlyph: View {
             .background(LinearGradient(colors: [tint.blend(with: .white, by: 0.12), tint.blend(with: .black, by: 0.2)], startPoint: .top, endPoint: .bottom),
                         in: RoundedRectangle(cornerRadius: size * 0.3, style: .continuous))
             .accessibilityHidden(true)
-    }
+    } }
 }
 
 /// A miniature of the tab bar, so the order being edited is visible at a glance.
 struct TabBarPreview: View {
     let bar: [AppSection]
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         HStack(spacing: 0) {
             ForEach(bar + [.more]) { item in
                 VStack(spacing: 3) {
@@ -100,7 +103,7 @@ struct TabBarPreview: View {
         .glassSurface(.regular, in: Capsule())
         .animation(.smooth(duration: 0.3), value: bar)
         .accessibilityElement(children: .combine)
-    }
+    } }
 }
 
 /// The phone's More tab: the sections that are not in the tab bar as tiles, and the tab bar editor.
@@ -114,7 +117,7 @@ struct MoreView: View {
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     private var slots: Int { PhoneTabs.slots(horizontal: horizontalSizeClass, vertical: verticalSizeClass) }
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         let tabs = PhoneTabs(stored: storedTabs).arranged(slots: slots, hiding: store.hiddenSections)
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
@@ -145,7 +148,7 @@ struct MoreView: View {
         // `-qaEditTabs 1` opens the editor for screenshots.
         .onAppear { if UserDefaults.standard.bool(forKey: "qaEditTabs") { editing = true } }
         #endif
-    }
+    } }
 
     private func badge(_ section: AppSection) -> Bool {
         switch section {
@@ -206,7 +209,7 @@ private struct MoreTile: View {
     private var version: String? {
         (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String).map { L10n.text("Version %@", $0) }
     }
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         NavigationLink(value: section) {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .top, spacing: 8) {
@@ -241,7 +244,7 @@ private struct MoreTile: View {
             .contentShape(.rect(cornerRadius: 22))
         }
         .buttonStyle(LiftButtonStyle())
-    }
+    } }
 }
 
 /// One draggable list: the tab bar's sections, an "In More" divider, then More's. Dragging a section
@@ -273,7 +276,7 @@ private struct TabBarEditor: View {
     private var tabs: PhoneTabs { Row.tabs(rows, slots: slots) }
     private var standard: PhoneTabs { PhoneTabs.standard.arranged(slots: slots) }
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         NavigationStack {
             List {
                 Section {
@@ -326,7 +329,7 @@ private struct TabBarEditor: View {
                 }
             }
         }
-    }
+    } }
 
     private func heading(_ title: String, symbol: String) -> some View {
         Label(title, systemImage: symbol)

@@ -20,7 +20,7 @@ struct MusicView: View {
     @State private var qaDownloads = UserDefaults.standard.bool(forKey: "qaMusicDownloads")
     #endif
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         let search = store.musicSearch
         ScrollView {
             LazyVStack(alignment: .leading, spacing: MusicLayout.rowSpacing) {
@@ -43,7 +43,7 @@ struct MusicView: View {
         }
         .screenBackdrop()
         .catalogSearchable(text: $query, prompt: L10n.text("Song, album or playlist"))
-        .onChange(of: query) { _, text in
+        .onChangeCompat(of: query) { _, text in
             if text.trimmingCharacters(in: .whitespacesAndNewlines) != autoPlayQuery { autoPlayQuery = nil }
             #if os(tvOS)
             // As in Global Search: typing only edits the query, and results change when it is
@@ -57,7 +57,7 @@ struct MusicView: View {
             autoPlayQuery = search.kind == .songs || search.kind == .top ? query.trimmingCharacters(in: .whitespacesAndNewlines) : nil
             search.search(query, kind: Self.searchKind, immediately: true); playDirectHitIfReady()
         }
-        .onChange(of: search.busy) {
+        .onChangeCompat(of: search.busy) {
             playDirectHitIfReady()
             #if DEBUG
             if !search.busy, UserDefaults.standard.bool(forKey: "qaMusicOpen"), qaOpened == nil { qaOpened = search.collections.first }
@@ -85,7 +85,7 @@ struct MusicView: View {
         }
         #endif
         #if DEBUG
-        .navigationDestination(item: $qaOpened) {
+        .navigationDestinationCompat(item: $qaOpened) {
             #if os(macOS)
             MusicCollectionView(collection: $0).musicBar()
             #else
@@ -123,7 +123,7 @@ struct MusicView: View {
             if UserDefaults.standard.bool(forKey: "qaMusicSettings") { showsSettings = true }
             #endif
         }
-    }
+    } }
 
     /// Apple TV leads with All, its results in rows; a phone or iPad has only the kinds.
     private static var chips: [MusicSearchKind] {
@@ -179,8 +179,8 @@ struct MusicView: View {
                            details: failureDetails(search), retry: { search.search(query, immediately: true) }, busy: search.busy)
                 .padding(.vertical, 24).tvFocusSection()
         } else if search.empty {
-            ContentUnavailableView(L10n.text("No Matching Songs"), systemImage: "music.note",
-                                   description: Text(L10n.text("Try the song's full name, or add the artist.")))
+            AppContentUnavailableView(L10n.text("No Matching Songs"), systemImage: "music.note",
+                                      description: Text(L10n.text("Try the song's full name, or add the artist.")))
                 .frame(maxWidth: .infinity).padding(.vertical, 60)
         } else {
             ForEach(search.failures.keys.sorted { $0.rawValue < $1.rawValue }, id: \.self) { platform in
@@ -224,7 +224,7 @@ private struct MusicHome: View {
     @Environment(Store.self) private var store
     let openSettings: () -> Void
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         let library = store.music.library
         let resumable = store.music.track == nil ? library.resumePoint : nil
         if let point = resumable, let track = point.queue.current {
@@ -253,7 +253,7 @@ private struct MusicHome: View {
                       action: L10n.text("Music Settings"), actionSymbol: "slider.horizontal.3", perform: openSettings)
                 .frame(minHeight: 420)
         }
-    }
+    } }
 }
 
 private struct MusicContinueCard: View {
@@ -261,7 +261,7 @@ private struct MusicContinueCard: View {
     let point: MusicResumePoint
     let track: MusicTrack
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         Button { store.music.resume() } label: {
             HStack(spacing: MusicLayout.gap) {
                 MusicArtwork(url: track.artwork, size: MusicLayout.art * 1.4)
@@ -280,7 +280,7 @@ private struct MusicContinueCard: View {
             .contentShape(Rectangle())
         }
         .cardButton()
-    }
+    } }
 }
 
 struct MusicTrackRow: View {
@@ -292,7 +292,7 @@ struct MusicTrackRow: View {
     var showsFavoriteMark = true
     let action: () -> Void
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         let current = store.music.track?.id == track.id
         Button(action: action) {
             HStack(spacing: MusicLayout.gap) {
@@ -344,13 +344,13 @@ struct MusicTrackRow: View {
             MusicDownloadMenuItems(tracks: [track])
         }
         .accessibilityLabel(Text([track.title, track.artistLine].joined(separator: ", ")))
-    }
+    } }
 }
 
 private struct MusicCollectionRow: View {
     let collection: MusicCollection
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         RouteLink {
             MusicCollectionView(collection: collection)
         } label: {
@@ -367,7 +367,7 @@ private struct MusicCollectionRow: View {
             .contentShape(Rectangle())
         }
         .glassRow()
-    }
+    } }
 }
 
 /// An album or playlist: its tracks, Play and Shuffle. Playing a track queues the whole list from it.
@@ -383,7 +383,7 @@ struct MusicCollectionView: View {
             .compactMap { $0 }.joined(separator: " · ")
     }
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: MusicLayout.rowSpacing) {
                 #if os(tvOS)
@@ -437,7 +437,7 @@ struct MusicCollectionView: View {
             }
             #endif
         }
-    }
+    } }
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 18) {

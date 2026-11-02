@@ -303,9 +303,9 @@ enum QALaunch {
 private struct QASheet<Content: View>: View {
     @ViewBuilder let content: () -> Content
     @State private var shown = false
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         Color.clear.task { shown = true }.sheet(isPresented: $shown) { content() }
-    }
+    } }
 }
 
 /// Debug-only on-device source sweep: `-qaSection settings -qaSweep 1 [-qaSweepWorkers 1] [-qaSweepFresh 1] [-qaSweepHomeTimeout 60] [-qaSweepRuntime javascript] [-qaSweepPorted 1]`.
@@ -482,7 +482,7 @@ private struct QADanmakuList: View {
         }
         return list.sorted { $0.time < $1.time }
     }()
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         #if os(tvOS)
         // A cover so focus starts on the first row instead of the tab bar.
         Color.clear.fullScreenCover(isPresented: .constant(true)) { DanmakuListView(player: player, comments: comments) }
@@ -492,6 +492,6 @@ private struct QADanmakuList: View {
             .ignoresSafeArea()
             .sheet(isPresented: .constant(true)) { DanmakuListView(player: player, comments: comments).danmakuListPresentation() }
         #endif
-    }
+    } }
 }
 #endif

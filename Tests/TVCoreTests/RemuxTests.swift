@@ -301,7 +301,7 @@ import Testing
     @Test func aLinkThatSendsTheRestOfTheFileIsReadThroughOneResponse() async throws {
         let size = 12 << 20
         var bytes = Data(count: size)
-        bytes.withUnsafeMutableBytes { raw in for i in 0..<size { raw[i] = UInt8(truncatingIfNeeded: i &* 31 &+ i >> 9) } }
+        bytes.withUnsafeMutableBytes { (raw: UnsafeMutableRawBufferPointer) in for i in 0..<size { raw[i] = UInt8(truncatingIfNeeded: i &* 31 &+ i >> 9) } }
         let name = "rest-of-file-\(UUID().uuidString).bin"
         let url = RangeServer.add(name, bytes, restOfFile: true)
         let source = try await Remux.httpSource(url, headers: [:], chunks: RangeServer.session, configuration: RangeServer.configuration)

@@ -27,7 +27,7 @@ struct PluginSignInView: View {
     }
     private var expired: Bool { now >= prompt.expires }
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         content
         #if os(macOS)
         .frame(minWidth: 640, minHeight: 360)
@@ -48,7 +48,7 @@ struct PluginSignInView: View {
                 now = Date()
             }
         }
-    }
+    } }
 
     #if os(iOS)
     private var content: some View {

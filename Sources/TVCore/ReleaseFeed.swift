@@ -88,6 +88,51 @@ public struct ReleaseFeed: Codable, Sendable, Equatable {
         return newestFirst.filter { AppVersion($0.version) > current && $0.link(for: platform, intelMac: intelMac) != nil }
     }
 
+    /// Resolution of an update check, separating upstream release availability from whether the current OS can install the upstream package directly.
+    public struct UpdateResolution: Equatable, Sendable {
+        public let latest: Release?
+        public let isLatestVersion: Bool
+        public let directDownloadURL: URL?
+        public let compatibilityGuidance: String?
+
+        public init(latest: Release?, isLatestVersion: Bool, directDownloadURL: URL?, compatibilityGuidance: String?) {
+            self.latest = latest
+            self.isLatestVersion = isLatestVersion
+            self.directDownloadURL = directDownloadURL
+            self.compatibilityGuidance = compatibilityGuidance
+        }
+    }
+
+    public func resolveUpdate(
+        after current: String,
+        platform: String = ReleaseFeed.platform,
+        intelMac: Bool = ReleaseFeed.isIntelMac,
+        requiresCompatibleBuild: Bool = false
+    ) -> UpdateResolution {
+        let newer = updates(after: current, platform: platform, intelMac: intelMac)
+        guard let latest = newer.first else {
+            return UpdateResolution(latest: nil, isLatestVersion: true, directDownloadURL: nil, compatibilityGuidance: nil)
+        }
+        if requiresCompatibleBuild {
+            let guidance = L10n.text(
+                "Yingxia %@ is available upstream. iOS 16 requires a verified iOS 16-compatible build rather than the default iOS 17+ release package.",
+                latest.version
+            )
+            return UpdateResolution(
+                latest: latest,
+                isLatestVersion: false,
+                directDownloadURL: nil,
+                compatibilityGuidance: guidance
+            )
+        }
+        return UpdateResolution(
+            latest: latest,
+            isLatestVersion: false,
+            directDownloadURL: latest.link(for: platform, intelMac: intelMac),
+            compatibilityGuidance: nil
+        )
+    }
+
     /// The releases someone skipped over when updating from `previous` to `current`, newest first.
     /// Without a previous version only the current release counts.
     public func whatsNew(since previous: String?, current: String, platform: String = ReleaseFeed.platform) -> [Release] {

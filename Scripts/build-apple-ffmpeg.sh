@@ -8,8 +8,9 @@
 # otherwise).
 set -euo pipefail
 cd "$(dirname "$0")/.."
+source "$PWD/Scripts/apple-deployment-targets.sh"
 CACHE="${TVBOX_FFMPEG_CACHE:-$HOME/Library/Caches/tvbox-ffmpeg}"
-SIGNATURE="$(sed -n '/^# RECIPE$/,/^# END$/p' "$0" | shasum -a 256 | cut -c1-16)"
+SIGNATURE="$(sed -n '/^# RECIPE$/,/^# END$/p' "$0" | sed "s/\\\$IOS_DEPLOYMENT_TARGET/$IOS_DEPLOYMENT_TARGET/g; s/\\\$TVOS_DEPLOYMENT_TARGET/$TVOS_DEPLOYMENT_TARGET/g; s/\\\$MACOS_DEPLOYMENT_TARGET/$MACOS_DEPLOYMENT_TARGET/g" | shasum -a 256 | cut -c1-16)"
 OUTPUT="$CACHE/$SIGNATURE/FFmpeg.xcframework"
 LINK="$PWD/build/FFmpeg/FFmpeg.xcframework"
 link() {
@@ -79,12 +80,12 @@ build_slice() {
   echo "FFmpeg $name built"
 }
 
-build_slice macos-arm64 macosx aarch64 arm64-apple-macos14.0
-build_slice macos-x86_64 macosx x86_64 x86_64-apple-macos14.0
-build_slice ios iphoneos aarch64 arm64-apple-ios17.0
-build_slice ios-simulator iphonesimulator aarch64 arm64-apple-ios17.0-simulator
-build_slice tvos appletvos aarch64 arm64-apple-tvos17.0
-build_slice tvos-simulator appletvsimulator aarch64 arm64-apple-tvos17.0-simulator
+build_slice macos-arm64 macosx aarch64 "arm64-apple-macos$MACOS_DEPLOYMENT_TARGET"
+build_slice macos-x86_64 macosx x86_64 "x86_64-apple-macos$MACOS_DEPLOYMENT_TARGET"
+build_slice ios iphoneos aarch64 "arm64-apple-ios$IOS_DEPLOYMENT_TARGET"
+build_slice ios-simulator iphonesimulator aarch64 "arm64-apple-ios$IOS_DEPLOYMENT_TARGET-simulator"
+build_slice tvos appletvos aarch64 "arm64-apple-tvos$TVOS_DEPLOYMENT_TARGET"
+build_slice tvos-simulator appletvsimulator aarch64 "arm64-apple-tvos$TVOS_DEPLOYMENT_TARGET-simulator"
 # END
 
 mkdir -p "$WORK/install-macos/lib"

@@ -14,7 +14,7 @@ struct DanmakuOverlay: View {
     @State private var engine = DanmakuEngine()
     @Environment(\.displayScale) private var scale
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         TimelineView(.animation) { timeline in
             Canvas { context, size in
                 // Reading the timeline's date makes every tick a new drawing; the clock itself is the player's.
@@ -31,7 +31,7 @@ struct DanmakuOverlay: View {
         .allowsHitTesting(false)
         .accessibilityHidden(true)
         .task(id: "\(revision):\(comments.count)") { engine.load(comments) }
-    }
+    } }
 }
 
 /// Whether comments are shown, from Settings and the player's own toggle.
@@ -196,7 +196,7 @@ struct DanmakuListView: View {
     }
 
     #if os(tvOS)
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         ScrollViewReader { proxy in
             // Not a List: tvOS puts a square focus background behind list cells.
             ScrollView {
@@ -214,7 +214,7 @@ struct DanmakuListView: View {
                 if now.isFinite, let target = comments.firstIndex(where: { $0.time >= now - 1 }) { proxy.scrollTo(target, anchor: .top) }
             }
         }
-    }
+    } }
 
     private func tvRow(_ comment: Danmaku) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 14) {
@@ -226,7 +226,7 @@ struct DanmakuListView: View {
         .contentShape(Rectangle())
     }
     #else
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         VStack(alignment: .leading, spacing: 0) {
             header.padding(.horizontal, 20).padding(.top, 22)
             DanmakuDensity(bins: density, progress: duration > 0 ? now / duration : 0) { fraction in
@@ -247,7 +247,7 @@ struct DanmakuListView: View {
                 try? await Task.sleep(for: .milliseconds(500))
             }
         }
-    }
+    } }
 
     private var header: some View {
         HStack(alignment: .center, spacing: 12) {
@@ -317,7 +317,7 @@ struct DanmakuListView: View {
             .onScrollByHand { following = false }
             .overlay {
                 if items.isEmpty {
-                    ContentUnavailableView.search(text: query)
+                    AppContentUnavailableView.search(text: query)
                 }
             }
             .overlay(alignment: .bottom) {
@@ -340,8 +340,8 @@ struct DanmakuListView: View {
             }
             .animation(.smooth(duration: 0.3), value: following)
             .onAppear { follow(proxy, animated: false) }
-            .onChange(of: now) { _, _ in if following { follow(proxy, animated: true) } }
-            .onChange(of: query) { _, text in if text.isEmpty { follow(proxy, animated: false) } }
+            .onChangeCompat(of: now) { _, _ in if following { follow(proxy, animated: true) } }
+            .onChangeCompat(of: query) { _, text in if text.isEmpty { follow(proxy, animated: false) } }
         }
     }
 
@@ -421,7 +421,7 @@ private struct DanmakuDensity: View {
     let bins: [Double]
     let progress: Double
     let seek: (Double) -> Void
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         GeometryReader { geometry in
             let width = geometry.size.width, height = geometry.size.height
             HStack(alignment: .bottom, spacing: 2) {
@@ -445,13 +445,13 @@ private struct DanmakuDensity: View {
         .accessibilityElement()
         .accessibilityLabel(L10n.text("Danmaku"))
         .accessibilityValue("\(Int(progress * 100))%")
-    }
+    } }
 }
 
 /// The playhead among the comments: everything above it has been on screen.
 private struct DanmakuNowLine: View {
     let time: Double
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         HStack(spacing: 10) {
             Text(DanmakuListView.clock(time))
                 .font(.caption.monospacedDigit().weight(.bold))
@@ -461,7 +461,7 @@ private struct DanmakuNowLine: View {
             Capsule().fill(Brand.cyan).frame(height: 2)
         }
         .padding(.horizontal, 12).padding(.vertical, 6)
-    }
+    } }
 }
 
 private struct DanmakuRowStyle: ButtonStyle {
@@ -474,13 +474,19 @@ private struct DanmakuRowStyle: ButtonStyle {
 
 extension View {
     /// The danmaku list as a sheet over the player: dark, half height first, pulled up for more.
-    func danmakuListPresentation() -> some View {
+    @ViewBuilder func danmakuListPresentation() -> some View {
         #if os(iOS)
-        self.presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
-            .presentationBackground(.ultraThinMaterial)
-            .presentationCornerRadius(28)
-            .preferredColorScheme(.dark)
+        if #available(iOS 16.4, *) {
+            self.presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(.ultraThinMaterial)
+                .presentationCornerRadius(28)
+                .preferredColorScheme(.dark)
+        } else {
+            self.presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+                .preferredColorScheme(.dark)
+        }
         #else
         self.frame(width: 520, height: 640)
             .background(Color(white: 0.09))

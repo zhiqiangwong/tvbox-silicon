@@ -27,8 +27,20 @@ XCFRAMEWORK="$WORK/$FAMILY-$VERSION-$SUPPORT/Python.xcframework"
 [ -d "$XCFRAMEWORK" ] || { echo "Missing $XCFRAMEWORK: run Scripts/build-apple-python.sh $TARGET." >&2; exit 1; }
 WHEELS="$WORK/wheels/$PLATFORM"
 mkdir -p "$WHEELS" "$WORK/sources"
+source "$PWD/Scripts/apple-deployment-targets.sh"
+case "$FAMILY" in
+  iOS) MINIMUM_OS="$IOS_DEPLOYMENT_TARGET" ;;
+  tvOS) MINIMUM_OS="$TVOS_DEPLOYMENT_TARGET" ;;
+esac
+STAMP="$PLATFORM:$MINIMUM_OS"
+# Invalidate wheels produced before pip's separate binary cache was disabled.
+WHEEL_STAMP="$STAMP:no-pip-cache-v1"
+if [ "$(cat "$WHEELS/.deployment-target" 2>/dev/null || true)" != "$WHEEL_STAMP" ]; then
+  rm -rf "$WHEELS"
+  mkdir -p "$WHEELS"
+fi
 # BeeWare's compiler wrappers (arm64-apple-ios-clang and so on) read the deployment target from here.
-export IPHONEOS_DEPLOYMENT_TARGET=17.0 TVOS_DEPLOYMENT_TARGET=17.0
+export IPHONEOS_DEPLOYMENT_TARGET="$IOS_DEPLOYMENT_TARGET" TVOS_DEPLOYMENT_TARGET="$TVOS_DEPLOYMENT_TARGET"
 export PATH="$XCFRAMEWORK/$SLICE/bin:$PATH"
 
 # pip in this venv believes it runs on the device's platform, so it compiles for it with the wrappers.
@@ -40,7 +52,7 @@ if [ ! -f "$VENV/lib/python$VERSION/site-packages/_cross_venv.pth" ]; then
     "$XCFRAMEWORK/$SLICE/platform-config/arm64-$PLATFORM"
 fi
 # Only the arm64 slice: the apps build for arm64 only (project.yml), simulators included.
-PIP=(env ARCHFLAGS="-arch arm64" "$VENV/bin/python" -m pip --disable-pip-version-check)
+PIP=(env ARCHFLAGS="-arch arm64" "$VENV/bin/python" -m pip --disable-pip-version-check --no-cache-dir)
 
 if ! ls "$WHEELS"/pycryptodome-"$PYCRYPTODOME"-*.whl >/dev/null 2>&1; then
   "${PIP[@]}" wheel --quiet --no-deps --no-binary :all: "pycryptodome==$PYCRYPTODOME" -w "$WHEELS"
@@ -62,7 +74,7 @@ if ! ls "$WHEELS"/lxml-"$LXML"-*.whl >/dev/null 2>&1; then
     "lxml==$LXML" -d "$WORK/sources"
   # Static libxml2 and libxslt, linked into lxml's modules. iconv and zlib come with the SDK.
   DEPS="$WORK/xml-$PLATFORM"
-  if [ ! -f "$DEPS/lib/libxslt.a" ] || ! grep -q "^$LIBXML2 $LIBXSLT\$" "$DEPS/versions" 2>/dev/null; then
+  if [ ! -f "$DEPS/lib/libxslt.a" ] || ! grep -q "^$LIBXML2 $LIBXSLT\$" "$DEPS/versions" 2>/dev/null || [ "$(cat "$DEPS/.deployment-target" 2>/dev/null || true)" != "$STAMP" ]; then
     fetch "https://download.gnome.org/sources/libxml2/${LIBXML2%.*}/libxml2-$LIBXML2.tar.xz" "$LIBXML2_SHA256"
     fetch "https://download.gnome.org/sources/libxslt/${LIBXSLT%.*}/libxslt-$LIBXSLT.tar.xz" "$LIBXSLT_SHA256"
     if [ ! -f "$WORK/sources/libxslt-$LIBXSLT/.lxml-patched" ]; then
@@ -80,10 +92,12 @@ if ! ls "$WHEELS"/lxml-"$LXML"-*.whl >/dev/null 2>&1; then
       && make -j "${JOBS:-8}" && make install) >"$DEPS/build/libxslt.log" 2>&1 \
       || { tail -30 "$DEPS/build/libxslt.log" >&2; exit 1; }
     echo "$LIBXML2 $LIBXSLT" > "$DEPS/versions"
+    echo "$STAMP" > "$DEPS/.deployment-target"
   fi
   # lxml asks pkg-config before xml2-config; keep it from finding the Mac's own libxml2. xml2-config
   # leaves out iconv, which the SDK keeps in its own library.
   PKG_CONFIG=/usr/bin/false XML2_CONFIG="$DEPS/bin/xml2-config" XSLT_CONFIG="$DEPS/bin/xslt-config" LDFLAGS="-liconv" \
     "${PIP[@]}" wheel --quiet --no-deps "$SDIST" -w "$WHEELS"
 fi
+echo "$WHEEL_STAMP" > "$WHEELS/.deployment-target"
 ls "$WHEELS"

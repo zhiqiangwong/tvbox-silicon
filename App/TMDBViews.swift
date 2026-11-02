@@ -4,7 +4,7 @@ import TVCore
 
 /// A video page's TMDB details (`TMDBMatch`): what this device already knows shows at once; otherwise the lookup runs
 /// while the page is open and its steps show, since a title nobody opened before takes some seconds.
-@MainActor @Observable final class TMDBLookup {
+@MainActor @Perceptible final class TMDBLookup {
     enum Phase: Equatable {
         case idle, looking, matched, ambiguous, notFound, failed, off
     }
@@ -181,7 +181,7 @@ extension TMDBMatch.Details {
 /// While the lookup runs: what it is doing. When it found several works: which one it is. Otherwise nothing.
 struct TMDBLookupStatus: View {
     let lookup: TMDBLookup
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         switch lookup.phase {
         case .looking:
             HStack(spacing: 12) {
@@ -205,13 +205,13 @@ struct TMDBLookupStatus: View {
         default:
             EmptyView()
         }
-    }
+    } }
 }
 
 /// "Which one is it?": the works TMDB has under this name, to choose from.
 struct TMDBChoices: View {
     let lookup: TMDBLookup
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 2) {
@@ -244,11 +244,11 @@ struct TMDBChoices: View {
                 .padding(.vertical, TMDBMetrics.focusRoom)
             }
             .scrollIndicators(.never)
-            .scrollClipDisabled()
+            .scrollClipDisabledCompat()
         }
         .padding(14)
         .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-    }
+    } }
 }
 
 struct TMDBCandidateTile: View {
@@ -262,7 +262,7 @@ struct TMDBCandidateTile: View {
     init(name: String, year: Int?, mediaType: TMDBMatch.MediaType, poster: URL?) {
         self.name = name; self.year = year; self.mediaType = mediaType; self.poster = poster
     }
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         VStack(alignment: .leading, spacing: 6) {
             PosterImage(url: poster)
                 .frame(width: TMDBMetrics.candidate, height: TMDBMetrics.candidate * 1.5)
@@ -273,18 +273,18 @@ struct TMDBCandidateTile: View {
         }
         .frame(width: TMDBMetrics.candidate, alignment: .leading)
         .foregroundStyle(.primary)
-    }
+    } }
 }
 
 /// TMDB's name for what the details come from, in its colors.
 struct TMDBBadge: View {
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         Text("TMDB")
             .font(.system(size: TMDBMetrics.badge, weight: .heavy, design: .rounded))
             .foregroundStyle(LinearGradient(colors: [Color(red: 0.56, green: 0.81, blue: 0.63), Color(red: 0.00, green: 0.71, blue: 0.89)],
                                             startPoint: .leading, endPoint: .trailing))
             .accessibilityLabel("TMDB")
-    }
+    } }
 }
 
 enum TMDBMetrics {
@@ -313,7 +313,7 @@ extension View {
 /// Who's in it: round photos with the character under each name.
 struct TMDBCastRow: View {
     let cast: [TMDBMatch.Person]
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         VStack(alignment: .leading, spacing: 10) {
             Text(L10n.text("Cast")).font(.headline)
             ScrollView(.horizontal) {
@@ -333,7 +333,7 @@ struct TMDBCastRow: View {
             }
             .scrollIndicators(.never)
         }
-    }
+    } }
 }
 
 /// TMDB's "you may like". A title here isn't from any source, so choosing one searches the viewer's sources for
@@ -341,7 +341,7 @@ struct TMDBCastRow: View {
 struct TMDBRelatedRow: View {
     let titles: [TMDBMatch.Candidate]
     let search: (String) -> Void
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         VStack(alignment: .leading, spacing: 10) {
             Text(L10n.text("You May Like")).font(.headline)
             ScrollView(.horizontal) {
@@ -354,9 +354,9 @@ struct TMDBRelatedRow: View {
                 .padding(.vertical, TMDBMetrics.focusRoom)
             }
             .scrollIndicators(.never)
-            .scrollClipDisabled()
+            .scrollClipDisabledCompat()
         }
-    }
+    } }
 }
 
 /// The facts that don't fit in a line: who made it, where, when, its original name.
@@ -373,7 +373,7 @@ struct TMDBInfoGrid: View {
         if !countries.isEmpty { rows.append((L10n.text("Country or Region"), countries.joined(separator: "、"))) }
         return rows
     }
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         let rows = rows
         if !rows.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
@@ -388,7 +388,7 @@ struct TMDBInfoGrid: View {
                 }
             }
         }
-    }
+    } }
 }
 
 /// Where the details come from, TMDB's notice, and a way to correct the match.
@@ -396,7 +396,7 @@ struct TMDBFooter: View {
     let lookup: TMDBLookup
     let title: String
     @State private var choosing = false
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 TMDBBadge()
@@ -422,7 +422,7 @@ struct TMDBFooter: View {
         #else
         .sheet(isPresented: $choosing) { TMDBPicker(lookup: lookup, title: title) }
         #endif
-    }
+    } }
 }
 
 /// Choose the work by hand: the other candidates, a search of TMDB, or none.
@@ -438,7 +438,7 @@ struct TMDBPicker: View {
         _query = State(initialValue: title)
     }
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         NavigationStack {
             List {
                 if !lookup.candidates.isEmpty && results.isEmpty {
@@ -478,7 +478,7 @@ struct TMDBPicker: View {
         #if os(macOS)
         .frame(minWidth: 420, minHeight: 520)
         #endif
-    }
+    } }
 
     private func search() async {
         let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -517,7 +517,7 @@ struct TMDBTVPicker: View {
         _query = State(initialValue: title)
     }
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 40) {
@@ -551,7 +551,7 @@ struct TMDBTVPicker: View {
             guard !Task.isCancelled else { return }
             await search()
         }
-    }
+    } }
 
     private func shelf(_ title: String, _ tiles: [(String, TMDBCandidateTile, TMDBMatch.MediaType, Int)]) -> some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -586,7 +586,7 @@ struct TMDBBanner<Actions: View>: View {
     let unmatched: String
     @ViewBuilder let actions: Actions
     @State private var logoAspect: CGFloat?
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         GeometryReader { proxy in
             let width = proxy.size.width
             ZStack(alignment: .bottomLeading) {
@@ -612,7 +612,7 @@ struct TMDBBanner<Actions: View>: View {
         }
         .foregroundStyle(.white).environment(\.colorScheme, .dark)
         .clipShape(RoundedRectangle(cornerRadius: TMDBBannerMetrics.corner, style: .continuous))
-    }
+    } }
 
     @ViewBuilder private func title(width: CGFloat) -> some View {
         if let logo = details.logo {
@@ -665,7 +665,7 @@ struct PosterBanner<Actions: View>: View {
     /// The cover's width over height once it loads; landscape covers are common (Bilibili, short dramas).
     @Binding var aspect: CGFloat?
     @ViewBuilder let actions: Actions
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         GeometryReader { proxy in
             let size = proxy.size, inset = TMDBBannerMetrics.inset
             let ratio = min(max(aspect ?? 2.0 / 3.0, 0.6), 1.8)
@@ -699,14 +699,14 @@ struct PosterBanner<Actions: View>: View {
         }
         .foregroundStyle(.white).environment(\.colorScheme, .dark)
         .clipShape(RoundedRectangle(cornerRadius: TMDBBannerMetrics.corner, style: .continuous))
-    }
+    } }
 }
 
 /// An episode without a still: its number set large in italics on a soft plate (the name itself when it has no number),
 /// so the tile keeps its shape and the row still reads at a glance.
 struct EpisodeNumberArt: View {
     let name: String
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         GeometryReader { proxy in
             let number = TMDBMatch.episodeNumber(name)
             let height = proxy.size.height
@@ -720,7 +720,7 @@ struct EpisodeNumberArt: View {
             }
         }
         .accessibilityHidden(true)
-    }
+    } }
 }
 
 /// An episode with TMDB's still: the picture, the source's name for it and TMDB's title. An episode without a still
@@ -732,7 +732,7 @@ struct TMDBEpisodeTile: View {
     var loading = false
     /// nil fills the grid cell.
     var width: CGFloat? = TMDBMetrics.episodeTile
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         VStack(alignment: .leading, spacing: 6) {
             Color.clear.aspectRatio(16.0 / 9.0, contentMode: .fit)
                 .overlay {
@@ -757,7 +757,7 @@ struct TMDBEpisodeTile: View {
         .frame(width: width, alignment: .leading)
         .frame(maxWidth: width == nil ? .infinity : nil, alignment: .leading)
         .contentShape(Rectangle())
-    }
+    } }
 }
 
 /// Large TMDB artwork: backdrops at the banner's size (posters stop at 720 pixels) and logos, which are transparent.
@@ -771,7 +771,7 @@ struct TMDBArtwork: View {
     private static let cache: NSCache<NSURL, Box> = { let cache = NSCache<NSURL, Box>(); cache.countLimit = 24; return cache }()
     final class Box { let image: CGImage; init(_ image: CGImage) { self.image = image } }
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         ZStack {
             if let image {
                 Image(decorative: image, scale: 1).resizable().aspectRatio(contentMode: fill ? .fill : .fit)
@@ -790,7 +790,7 @@ struct TMDBArtwork: View {
             Self.cache.setObject(Box(decoded), forKey: url as NSURL)
             withAnimation(.easeOut(duration: 0.3)) { show(decoded) }
         }
-    }
+    } }
 
     private func show(_ decoded: CGImage) {
         image = decoded

@@ -56,8 +56,8 @@ struct GlobalSearchView: View {
                                                                        dot: store.health(of: $0.site).warning) }
     }
 
-    var body: some View {
-        @Bindable var model = model
+    var body: some View { AppPerceptionTracking {
+        @AppBindable var model = model
         #if os(tvOS)
         searchResults
             .searchable(text: $model.draft, prompt: Text(L10n.text("Search videos")))
@@ -72,12 +72,12 @@ struct GlobalSearchView: View {
             .task(id: model.draft) { await suggest(model.draft) }
             .onSubmit(of: .search) { if let config = store.subscription { submit(config) } }
             .screenBackdrop()
-            .sheet(isPresented: $showFailures) { failureDetails }
+            .sheet(isPresented: $showFailures) { AppPerceptionTracking { failureDetails } }
             .onAppear { if let config = store.subscription { model.resumeSuspended(config: config) } }
             .onDisappear { endVisible = false; model.suspend() }
         #else
         searchResults
-            .scrollPosition(id: $model.scrollID)
+            .scrollPositionCompat(id: $model.scrollID)
             // A hard edge: the summary, the activity and the source chips are a tall bar, and results showed through it.
             .topBar(hardEdge: true) { if let config = store.subscription, showsHeader { searchHeader(config) } }
             .screenBackdrop()
@@ -90,11 +90,11 @@ struct GlobalSearchView: View {
             .catalogSearchable(text: $model.draft, prompt: L10n.text("Search videos"))
             .searchFieldFocused($inputFocused)
             .onSubmit(of: .search) { if let config = store.subscription { submit(config) } }
-            .onChange(of: model.draft) { _, draft in if draft.isEmpty && !model.keyword.isEmpty { model.reset() } }
+            .onChangeCompat(of: model.draft) { _, draft in if draft.isEmpty && !model.keyword.isEmpty { model.reset() } }
             #if os(iOS)
             .scrollDismissesKeyboard(.interactively)
             #endif
-            .sheet(isPresented: $showFailures) { failureDetails }
+            .sheet(isPresented: $showFailures) { AppPerceptionTracking { failureDetails } }
             .onAppear {
                 // Not on iPhone and iPad: the keyboard would cover the tab bar, and a tab's root page has no back
                 // button, so there would be no way to leave without searching.
@@ -113,7 +113,7 @@ struct GlobalSearchView: View {
             }
             #endif
         #endif
-    }
+    } }
 
     /// The search field is the system's, so the bar below it waits for a search.
     private var showsHeader: Bool { !model.keyword.isEmpty }
@@ -138,7 +138,7 @@ struct GlobalSearchView: View {
                     if model.keyword.isEmpty { idle.frame(maxWidth: 760, alignment: .leading).frame(maxWidth: .infinity) }
                     else {
                         if model.total == 0 {
-                            ContentUnavailableView(L10n.text("No searchable sources are available on this device."), systemImage: "magnifyingglass")
+                            AppContentUnavailableView(L10n.text("No searchable sources are available on this device."), systemImage: "magnifyingglass")
                         } else if posters.isEmpty {
                             if model.busy {
                                 VStack(spacing: 18) {
@@ -150,9 +150,10 @@ struct GlobalSearchView: View {
                                 emptyResults(config)
                             }
                         } else {
+                            let currentPosters = posters
                             LazyVGrid(columns: Layout.posterColumns, spacing: Layout.gridRowSpacing) {
-                                resultLinks(config)
-                            }.scrollTargetLayout()
+                                resultLinks(config, posters: currentPosters)
+                            }.scrollTargetLayoutCompat()
                             // Scrolling the end into view asks for the next page; while it stays in view each new page asks again.
                             if model.canLoadMore(model.selectedSource) || model.loadingMore {
                                 ProgressView().frame(maxWidth: .infinity).padding(.vertical, 24)
@@ -160,14 +161,14 @@ struct GlobalSearchView: View {
                                         endVisible = visible
                                         if visible { model.loadMore(model.selectedSource, config: config) }
                                     }
-                                    .onChange(of: model.loadingMore) { _, loading in
+                                    .onChangeCompat(of: model.loadingMore) { _, loading in
                                         if !loading, endVisible { model.loadMore(model.selectedSource, config: config) }
                                     }
                             }
                         }
                     }
                 } else {
-                    ContentUnavailableView(L10n.text("No Sources Yet"), systemImage: "magnifyingglass", description: Text(L10n.text("Add a TVBox subscription in Settings.")))
+                    AppContentUnavailableView(L10n.text("No Sources Yet"), systemImage: "magnifyingglass", description: Text(L10n.text("Add a TVBox subscription in Settings.")))
                 }
             }.pageContainer()
         }
@@ -176,7 +177,7 @@ struct GlobalSearchView: View {
     /// Separates "nothing matched" from "most sources never answered" so the empty state does not blame the keyword.
     private func emptyResults(_ config: Subscription) -> some View {
         let mostlyFailed = model.failures.count * 2 > model.completed
-        return ContentUnavailableView {
+        return AppContentUnavailableView {
             Label(L10n.text(mostlyFailed ? "Most Sources Unavailable" : "No Videos"),
                   systemImage: mostlyFailed ? "wifi.exclamationmark" : "magnifyingglass")
         } description: {
@@ -196,7 +197,7 @@ struct GlobalSearchView: View {
     }
 
     private func searchHeader(_ config: Subscription) -> some View {
-        @Bindable var model = model
+        @AppBindable var model = model
         return VStack(alignment: .leading, spacing: 14) {
             if !model.keyword.isEmpty {
                 ViewThatFits(in: .horizontal) {
@@ -314,7 +315,7 @@ struct GlobalSearchView: View {
         }
     }
 
-    @ViewBuilder private func resultLinks(_ config: Subscription) -> some View {
+    @ViewBuilder private func resultLinks(_ config: Subscription, posters: [SearchPoster]) -> some View {
         ForEach(posters) { item in
             RouteLink {
                 CatalogDestination(video: item.video, client: CatalogClient(site: item.site, origin: config.origin, jarURL: config.spiderURL))
@@ -407,18 +408,22 @@ struct GlobalSearchView: View {
         NavigationStack {
             List {
                 ForEach(model.failures) { result in
-                    VStack(alignment: .leading, spacing: 6) {
-                        let health = store.health(of: result.site)
-                        HStack(spacing: 6) { Text(result.site.name).font(.headline); SourceHealthDot(status: health) }
-                        Text(result.error ?? "").font(.caption).foregroundStyle(.secondary)
-                        if health == .failing { Text(health.summary).font(.caption).foregroundStyle(Brand.rose) }
+                    AppPerceptionTracking {
+                        VStack(alignment: .leading, spacing: 6) {
+                            let health = store.health(of: result.site)
+                            HStack(spacing: 6) { Text(result.site.name).font(.headline); SourceHealthDot(status: health) }
+                            Text(result.error ?? "").font(.caption).foregroundStyle(.secondary)
+                            if health == .failing { Text(health.summary).font(.caption).foregroundStyle(Brand.rose) }
+                        }
                     }
                 }
                 // Sources this search left out for failing; the retry below asks them too.
                 ForEach(model.paused) { site in
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack(spacing: 6) { Text(site.name).font(.headline); SourceHealthDot(status: .failing) }
-                        Text(pauseNote(site)).font(.caption).foregroundStyle(Brand.rose)
+                    AppPerceptionTracking {
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(spacing: 6) { Text(site.name).font(.headline); SourceHealthDot(status: .failing) }
+                            Text(pauseNote(site)).font(.caption).foregroundStyle(Brand.rose)
+                        }
                     }
                 }
             }
@@ -508,7 +513,7 @@ private struct SearchActivityList: View {
     let showsSources: Bool
     /// The on-device plugin worker runs at most this many searches at once.
     private let limit = 5
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         TimelineView(.periodic(from: .now, by: 0.5)) { timeline in
             let active = Array(PluginPreparation.active(origin: origin).prefix(limit))
             VStack(alignment: .leading, spacing: 10) {
@@ -549,7 +554,7 @@ private struct SearchActivityList: View {
             .accessibilityElement(children: .combine)
             .animation(.smooth(duration: 0.25), value: active.map(\.id))
         }
-    }
+    } }
     /// While searching, the plugin's "loading" stage is the search itself.
     private func status(_ snapshot: PluginPreparation.Snapshot) -> String {
         let title = snapshot.stage == .loading ? L10n.text("Searching…") : snapshot.stage.title
@@ -712,7 +717,7 @@ struct RecommendationsView: View {
         }
     }
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         VStack(alignment: .leading, spacing: 16) {
             #if os(tvOS)
             recommendationControls.tvFocusSection()
@@ -755,11 +760,12 @@ struct RecommendationsView: View {
                     .foregroundStyle(.secondary)
             }
             if category == nil, !model.items.isEmpty, let loadedSite = model.site {
+                let items = model.items
                 if (loadedSite.raw["indexs"]?.int ?? 0) == 1 {
                     Text(L10n.text("Choose a title to find it across your sources.")).font(.subheadline).foregroundStyle(.secondary)
                 }
                 LazyVGrid(columns: Layout.posterColumns, spacing: Layout.gridRowSpacing) {
-                    ForEach(model.items) { item in
+                    ForEach(items) { item in
                         switch item.destination {
                         case .search(let keyword):
                             Button { store.searchVideos(keyword) } label: { PosterCard(recommendation: item) }.cardButton()
@@ -798,14 +804,14 @@ struct RecommendationsView: View {
                                client: CatalogClient(site: loadedSite, origin: config.origin, jarURL: config.spiderURL))
         }
         .onDisappear { browser.cancel() }
-        .navigationDestination(item: $openedSource) { route in
+        .navigationDestinationCompat(item: $openedSource) { route in
             #if os(macOS)
             route.build().musicBar()
             #else
             route.build()
             #endif
         }
-    }
+    } }
 
     /// A long press on a source (a right click on Mac): hide it, open its page to search only that source, as the
     /// Sources page does, or go to the Sources page to manage them all. `leave` runs the two that leave Watch Now;
@@ -844,11 +850,12 @@ struct RecommendationsView: View {
             Button(L10n.text("Retry")) { Task { await browser.load(browser.request, client: client) } }
         }
         if !browser.videos.isEmpty {
+            let videos = browser.videos
             if isIndex {
                 Text(L10n.text("Choose a title to find it across your sources.")).font(.subheadline).foregroundStyle(.secondary)
             }
             LazyVGrid(columns: Layout.posterColumns, spacing: Layout.gridRowSpacing) {
-                ForEach(browser.videos) { video in
+                ForEach(videos) { video in
                     if isIndex {
                         Button { store.searchVideos(video.name) } label: { PosterCard(video: video) }.cardButton()
                     } else {
@@ -894,7 +901,7 @@ struct SourceStrip: View {
     /// A chip's long-press (right-click) menu, by item id.
     var actions: ((String) -> AnyView)? = nil
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         ScrollStrip(scrollTo: selection, leftLabel: "Scroll sources left", rightLabel: "Scroll sources right") {
             HStack(spacing: 6) {
                 ForEach(items) { item in
@@ -906,9 +913,9 @@ struct SourceStrip: View {
                 }
             }
             .padding(.vertical, 4)
-            .scrollTargetLayout()
+            .scrollTargetLayoutCompat()
         }
-    }
+    } }
 }
 
 /// Outside ScrollStrip so measuring it in a sendable closure does not capture the generic content type.
@@ -952,7 +959,7 @@ struct ScrollStrip<Content: View>: View {
         func clamp(_ x: CGFloat) -> CGFloat { min(metrics.maximum, max(0, x)) }
     }
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         ScrollViewReader { proxy in
             HStack(spacing: 8) {
                 measured(
@@ -1002,7 +1009,7 @@ struct ScrollStrip<Content: View>: View {
                 #endif
             }
         }
-    }
+    } }
 
     private func update(_ metrics: Metrics) {
         tracking.metrics = metrics
@@ -1028,11 +1035,13 @@ struct ScrollStrip<Content: View>: View {
     @ViewBuilder private var measuredContent: some View {
         if #available(iOS 18, *) {
             content
-        } else {
+        } else if #available(iOS 17, *) {
             content.onGeometryChange(for: Metrics.self) { geometry in
                 let visible = geometry.bounds(of: .scrollView(axis: .horizontal)) ?? .zero
                 return Metrics(offset: visible.minX, viewport: visible.width, maximum: max(0, geometry.size.width - visible.width))
             } action: { update($0) }
+        } else {
+            content
         }
     }
 
@@ -1095,7 +1104,7 @@ private struct SourceChip: View {
     @State private var hovering = false
     @Environment(\.stripDrag) private var drag
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         let label = SourceLabel(name)
         // The chip under the pointer receives the mouse-up that ends a drag.
         Button { if drag?.active != true { action() } } label: {
@@ -1119,7 +1128,7 @@ private struct SourceChip: View {
         .accessibilityLabel(label.title)
         .accessibilityAddTraits(selected ? [.isSelected] : [])
         .help(name)
-    }
+    } }
 
     private var fill: Color {
         if selected { return Brand.accent }

@@ -3,17 +3,23 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$PWD"; TARGET="${1:-ios-simulator}"
+source "$ROOT/Scripts/apple-deployment-targets.sh"
 case "$TARGET" in
- ios) PLATFORM=iphoneos; CONF=ios-aarch64-zero-release ;;
- ios-simulator) PLATFORM=iphonesimulator; CONF=ios-aarch64-zero-simulator ;;
- tvos) PLATFORM=appletvos; CONF=tvos-aarch64-zero-release ;;
- tvos-simulator) PLATFORM=appletvsimulator; CONF=tvos-aarch64-zero-simulator ;;
+ ios) PLATFORM=iphoneos; CONF=ios-aarch64-zero-release; MINIMUM="-miphoneos-version-min=$IOS_DEPLOYMENT_TARGET" ;;
+ ios-simulator) PLATFORM=iphonesimulator; CONF=ios-aarch64-zero-simulator; MINIMUM="-mios-simulator-version-min=$IOS_DEPLOYMENT_TARGET" ;;
+ tvos) PLATFORM=appletvos; CONF=tvos-aarch64-zero-release; MINIMUM="-mtvos-version-min=$TVOS_DEPLOYMENT_TARGET" ;;
+ tvos-simulator) PLATFORM=appletvsimulator; CONF=tvos-aarch64-zero-simulator; MINIMUM="-mtvos-simulator-version-min=$TVOS_DEPLOYMENT_TARGET" ;;
  *) exit 2 ;;
 esac
 WORK="$ROOT/build/apple-runtime"; OUT="$ROOT/build/AppleRuntime/$PLATFORM"
 BOOT="$WORK/boot-jdk/jdk-26.0.2.1+1/Contents/Home"
 JDK="$WORK/openjdk-mobile/build/$CONF"
-if [ ! -f "$JDK/images/static-libs/lib/zero/libjvm.a" ] || [ ! -f "$JDK/images/static-libs/lib/libmanagement.a" ]; then Scripts/build-apple-jvm.sh "$TARGET"; fi
+if [ "$(cat "$OUT/.deployment-target" 2>/dev/null || true)" != "$MINIMUM" ]; then
+  rm -rf "$OUT/lib"
+fi
+if [ ! -f "$JDK/images/static-libs/lib/zero/libjvm.a" ] || [ ! -f "$JDK/images/static-libs/lib/libmanagement.a" ] || [ "$(cat "$JDK/.deployment-target" 2>/dev/null || true)" != "$MINIMUM" ]; then
+  Scripts/build-apple-jvm.sh "$TARGET"
+fi
 Scripts/build-apple-native-bindings.sh "$TARGET"
 mkdir -p "$OUT/lib" "$OUT/include" "$OUT/Resources/lib/lib/security" "$OUT/Resources/lib/conf/security" "$OUT/Resources/JavaHost/lib"
 cp "$BOOT/include/jni.h" "$BOOT/include/darwin/jni_md.h" "$OUT/include/"
@@ -28,7 +34,21 @@ xcrun libtool -static -o "$OUT/lib/libTVAppleRuntime.a" "${ARCHIVES[@]}"
 # JDK version, so it comes from a host build of the same source tree.
 HOST="$WORK/openjdk-mobile/build/macosx-host/images/jdk"
 if [ ! -x "$HOST/bin/jlink" ]; then
- (cd "$WORK/openjdk-mobile" && sh configure --with-conf-name=macosx-host --disable-warnings-as-errors --with-boot-jdk="$BOOT" && make CONF=macosx-host JOBS="${JOBS:-4}" jdk-image)
+ DUMMY_METAL="$WORK/dummy-metal.sh"
+ cat > "$DUMMY_METAL" <<'EOF'
+#!/bin/sh
+while [ $# -gt 0 ]; do
+  if [ "$1" = "-o" ] && [ $# -gt 1 ]; then
+    mkdir -p "$(dirname "$2")"
+    : > "$2"
+    exit 0
+  fi
+  shift
+done
+echo "Apple LLVM version 17.0.0 (metal)"
+EOF
+ chmod +x "$DUMMY_METAL"
+ (cd "$WORK/openjdk-mobile" && sh configure --with-conf-name=macosx-host --disable-warnings-as-errors --with-boot-jdk="$BOOT" METAL="$DUMMY_METAL" METALLIB="$DUMMY_METAL" && make CONF=macosx-host JOBS="${JOBS:-4}" jdk-image)
 fi
 # jdk.charsets carries GBK/GB2312/GB18030/Big5, which many Chinese source sites still serve.
 MODULES=java.base,java.management,java.logging,java.naming,java.security.sasl,java.xml,jdk.zipfs,jdk.httpserver,jdk.unsupported,jdk.charsets
@@ -46,4 +66,5 @@ cp "$BOOT/lib/security/cacerts" "$OUT/Resources/lib/lib/security/"
 cp "$BOOT/lib/tzdb.dat" "$OUT/Resources/lib/lib/"
 cp "$WORK/native-$TARGET/apple-bindings.jar" "$OUT/Resources/JavaHost/"
 Scripts/sync-apple-javahost.sh "$PLATFORM"
+echo "$MINIMUM" > "$OUT/.deployment-target"
 echo "Packaged runtime: $OUT"

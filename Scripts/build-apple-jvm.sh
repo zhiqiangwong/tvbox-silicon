@@ -7,19 +7,20 @@ WORK="$ROOT/build/apple-runtime"
 SOURCE="$WORK/openjdk-mobile"
 REVISION=c1ed06aaef34c8dccf71e236d1ffa20918a77cfb
 BOOT="$WORK/boot-jdk/jdk-26.0.2.1+1/Contents/Home"
+source "$ROOT/Scripts/apple-deployment-targets.sh"
 TARGET="${1:-ios}"
 case "$TARGET" in
-  ios) SDK=iphoneos; CONF=ios-aarch64-zero-release; MINIMUM=-miphoneos-version-min=17.0 ;;
-  ios-simulator) SDK=iphonesimulator; CONF=ios-aarch64-zero-simulator; MINIMUM=-mios-simulator-version-min=17.0 ;;
-  tvos) SDK=appletvos; CONF=tvos-aarch64-zero-release; MINIMUM=-mtvos-version-min=17.0 ;;
-  tvos-simulator) SDK=appletvsimulator; CONF=tvos-aarch64-zero-simulator; MINIMUM=-mtvos-simulator-version-min=17.0 ;;
+  ios) SDK=iphoneos; CONF=ios-aarch64-zero-release; MINIMUM=-miphoneos-version-min=$IOS_DEPLOYMENT_TARGET ;;
+  ios-simulator) SDK=iphonesimulator; CONF=ios-aarch64-zero-simulator; MINIMUM=-mios-simulator-version-min=$IOS_DEPLOYMENT_TARGET ;;
+  tvos) SDK=appletvos; CONF=tvos-aarch64-zero-release; MINIMUM=-mtvos-version-min=$TVOS_DEPLOYMENT_TARGET ;;
+  tvos-simulator) SDK=appletvsimulator; CONF=tvos-aarch64-zero-simulator; MINIMUM=-mtvos-simulator-version-min=$TVOS_DEPLOYMENT_TARGET ;;
   *) echo "Usage: $0 [ios|ios-simulator|tvos|tvos-simulator]" >&2; exit 2 ;;
 esac
 mkdir -p "$WORK"
 fetch() {
   local url="$1" destination="$2" digest="$3"
   if [ ! -f "$destination" ]; then
-    curl -fL --retry 2 "$url" -o "$destination.download"
+    curl -fL -C - --retry 8 --retry-all-errors "$url" -o "$destination.download"
     mv "$destination.download" "$destination"
   fi
   echo "$digest  $destination" | shasum -a 256 -c -
@@ -33,10 +34,14 @@ fi
 fetch https://download2.gluonhq.com/mobile/mobile-support-20250106.zip \
   "$WORK/mobile-support.zip" 5793dd8700612fe0c5a1cbbfb280464167aea5944b3c01f32b340542976e9440
 if [ ! -d "$WORK/support/support" ]; then unzip -q "$WORK/mobile-support.zip" -d "$WORK/support"; fi
-if [ ! -d "$SOURCE/.git" ]; then git clone --depth 1 https://github.com/openjdk/mobile.git "$SOURCE"; fi
-if [ "$(git -C "$SOURCE" rev-parse HEAD)" != "$REVISION" ]; then
-  git -C "$SOURCE" fetch origin "$REVISION"
-  git -C "$SOURCE" checkout --detach "$REVISION"
+if [ ! -d "$SOURCE/.git" ]; then
+  rm -rf "$SOURCE"
+  git init -q "$SOURCE"
+  git -C "$SOURCE" remote add origin https://github.com/openjdk/mobile.git
+fi
+if [ "$(git -C "$SOURCE" rev-parse HEAD 2>/dev/null || true)" != "$REVISION" ]; then
+  git -C "$SOURCE" fetch --depth 1 origin "$REVISION" || git -C "$SOURCE" fetch --depth 1 origin "$REVISION"
+  git -C "$SOURCE" checkout -q --detach "$REVISION"
 fi
 PATCH="$ROOT/Runtime/AppleRuntime/patches/openjdk-apple-zero.patch"
 if git -C "$SOURCE" apply --check "$PATCH" 2>/dev/null; then
@@ -50,6 +55,9 @@ SUPPORT="$WORK/support/support"
 # exact platform: arm64 device and simulator archives are not interchangeable.
 "$ROOT/Scripts/build-apple-libffi.sh" "$TARGET"
 FFI="$WORK/libffi-$TARGET-3.4.8/install"
+if [ -d "$SOURCE/build/$CONF" ] && [ "$(cat "$SOURCE/build/$CONF/.deployment-target" 2>/dev/null || true)" != "$MINIMUM" ]; then
+  rm -rf "$SOURCE/build/$CONF"
+fi
 cd "$SOURCE"
 sh configure --with-conf-name="$CONF" --disable-warnings-as-errors \
   --openjdk-target=aarch64-macos-ios --with-jvm-variants=zero --with-boot-jdk="$BOOT" \
@@ -62,5 +70,6 @@ make CONF="$CONF" JOBS="${JOBS:-4}" hotspot-static-libs java.base-static-libs ja
 make CONF="$CONF" JOBS="${JOBS:-4}" java.management-java java.logging-java java.naming-java java.security.sasl-java java.xml-java jdk.httpserver-java jdk.zipfs-java jdk.unsupported-java jdk.charsets-java
 make CONF="$CONF" static-libs-image-only
 test -f "$SOURCE/build/$CONF/images/static-libs/lib/zero/libjvm.a"
+echo "$MINIMUM" > "$SOURCE/build/$CONF/.deployment-target"
 echo "Zero static libraries: $SOURCE/build/$CONF/images/static-libs/lib"
 echo "Exploded module classes: $SOURCE/build/$CONF/jdk/modules"

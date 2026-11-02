@@ -536,7 +536,15 @@ final class NVASession: @unchecked Sendable {
     func reply(_ object: [String: Any]) { let body = json(object); write([0xc0, 0x01] + next() + length(body.count) + body) }
     func command(_ action: String, _ object: [String: Any]) {
         let body = json(object), name = Array("Command".utf8), verb = Array(action.utf8)
-        write([0xe0, 0x03] + next() + [0x01, UInt8(name.count)] + name + [UInt8(verb.count)] + verb + length(body.count) + body)
+        var payload: [UInt8] = [0xe0, 0x03]
+        payload += next()
+        payload += [0x01, UInt8(name.count)]
+        payload += name
+        payload += [UInt8(verb.count)]
+        payload += verb
+        payload += length(body.count)
+        payload += body
+        write(payload)
     }
 }
 #endif

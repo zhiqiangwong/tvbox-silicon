@@ -375,3 +375,19 @@ Only `id`, `title` and `body` are required. Texts are keyed `en`, `zh-Hans`, `zh
 The app asks at launch and whenever it becomes active, at most every 15 minutes. It sends back the `ETag` (and `Last-Modified`, if present) of the copy it saved, so an unchanged file costs a `304 Not Modified` without a body; the website serves the file with `cache-control: max-age=0, must-revalidate`, so a deploy reaches devices at their next check.
 
 QA (Debug builds): `-qaMessageFeed <url>` reads another feed (a `file://` path works on simulators), `-qaVersion` and `-qaBuild` pretend to be another build, and `-qaAppStore 1` acts as an App Store build. With `-qaSection`, the launch check only runs when `-qaMessageFeed` is given. Shown IDs are in the defaults key `messages.seen`.
+
+### iOS 16 compatibility build and upstream merge checklist
+
+On the `codex/support-ios16` compatibility branch, `TVBox-iOS` and `TVCore` target **iOS / iPadOS 16.0+** (while `TVBox-macOS` remains macOS 15.0+ and `TVBox-tvOS` remains tvOS 17.0+). Centralized deployment targets live in `Scripts/apple-deployment-targets.sh`.
+
+Run the repeatable minimum-deployment-target verification check after integrating upstream commits:
+
+```sh
+Scripts/verify.sh --ios-min-target
+```
+
+When merging `upstream/main` into the compatibility branch, check three areas before packaging:
+
+1. **SwiftUI / system APIs (`App/GlassKit.swift`):** Any newly added iOS 17+ or iOS 16.4+ modifiers and views (`onChange` two-parameter/zero-parameter overloads, `ContentUnavailableView`, `symbolEffect`, `sensoryFeedback`, `scrollPosition`, `scrollTargetLayout`, `scrollClipDisabled`, `contentMargins`, `containerRelativeFrame`, `navigationDestination(item:)`, `presentationBackground`, `focusEffectDisabled`, `AVPlayerViewController.speeds`) must go through the centralized compatibility wrappers in `App/GlassKit.swift` instead of scattering `#available` checks across feature views.
+2. **Observation model (`Sources/TVCore/ObservationCompatibility.swift`):** Shared and app-level observable models must use `@Perceptible` and `@PerceptionIgnored` (backed by `swift-perception` 1.6.0) rather than `@Observable` / `@ObservationIgnored`, `@AppBindable` instead of `@Bindable`, `withPerceptionTracking` instead of `withObservationTracking`, and `AppPerceptionTracking { ... }` around iOS-reachable `View` / `ViewModifier` `body` implementations.
+3. **Native dependencies and build caches (`Scripts/apple-deployment-targets.sh`):** Any rebuilt iOS native archive or framework (`build/AppleRuntime/iphoneos`, `build/ApplePython/iphoneos`, `build/FFmpeg/FFmpeg.xcframework`, `build/NodeMobile/NodeMobile.xcframework`) must record `iosDeploymentTarget=16.0` in its `.build-stamp` / `build-record.json` and pass `otool -l` `LC_BUILD_VERSION` (`minos <= 16.0`) inspection.

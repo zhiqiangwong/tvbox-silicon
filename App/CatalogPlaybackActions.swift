@@ -10,7 +10,7 @@ struct CatalogPlaybackActions: View {
     @State private var showsSkip = false
     @State private var showsDanmaku = false
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         if channel.historyContext != nil {
             Menu {
                 if let catalog = store.catalog(for: channel) {
@@ -63,9 +63,11 @@ struct CatalogPlaybackActions: View {
             .accessibilityIdentifier("player.catalogOptions")
             .sheet(isPresented: $showsSkip) { EpisodeSkipSettingsView(session: session) }
             .sheet(isPresented: $showsDanmaku) {
-                CatalogDanmakuSettingsView(model: session.catalogDanmaku, channelName: channel.name)
+                AppPerceptionTracking {
+                    CatalogDanmakuSettingsView(model: session.catalogDanmaku, channelName: channel.name)
+                }
             }
         }
-    }
+    } }
 }
 #endif

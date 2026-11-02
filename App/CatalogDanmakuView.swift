@@ -3,7 +3,7 @@ import AVKit
 import TVCore
 import UniformTypeIdentifiers
 
-@MainActor @Observable final class CatalogDanmakuModel {
+@MainActor @Perceptible final class CatalogDanmakuModel {
     private(set) var comments: [CatalogDanmakuComment] = []
     private(set) var track = ""
     private(set) var revision = UUID()
@@ -36,8 +36,8 @@ import UniformTypeIdentifiers
     private(set) var fromCache = false
     var context: PlaybackHistoryContext? { automaticContext }
 
-    @ObservationIgnored private var renderedKey: String?
-    @ObservationIgnored private var rendered: [Danmaku] = []
+    @PerceptionIgnored private var renderedKey: String?
+    @PerceptionIgnored private var rendered: [Danmaku] = []
     var renderedRevision: String { "\(revision):\(offset):\(fontSize)" }
     var renderedComments: [Danmaku] {
         let key = renderedRevision
@@ -170,8 +170,8 @@ struct CatalogDanmakuSettingsView: View {
     @State private var work: Task<Void, Never>?
     @State private var showsImporter = false
 
-    var body: some View {
-        @Bindable var model = model
+    var body: some View { AppPerceptionTracking {
+        @AppBindable var model = model
         NavigationStack {
             Form {
                 Section {
@@ -242,7 +242,7 @@ struct CatalogDanmakuSettingsView: View {
                         #if os(iOS)
                         .textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
                         #endif
-                        .onChange(of: server) { _, _ in
+                        .onChangeCompat(of: server) { _, _ in
                             work?.cancel(); busy = false; animes = []; episodes = []; selectedAnime = nil; searched = false; error = nil
                         }
                     Button(L10n.text("Use Default URL")) { server = CatalogDanmakuClient.defaultServer }
@@ -261,7 +261,7 @@ struct CatalogDanmakuSettingsView: View {
             do { try model.importFile(result.get()); dismiss() }
             catch { self.error = error.localizedDescription }
         }
-    }
+    } }
 
     private var status: String {
         switch model.automaticState {

@@ -7,7 +7,7 @@ struct BilibiliMark: View {
     static let blue = Color(red: 0, green: 0.682, blue: 0.925)
     var size: CGFloat = 44
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         #if os(tvOS)
         let size = size >= 44 ? max(size, 56) : size
         #endif
@@ -20,7 +20,7 @@ struct BilibiliMark: View {
             .frame(width: size, height: size)
             .background(Self.blue, in: RoundedRectangle(cornerRadius: size * 0.26, style: .continuous))
             .accessibilityHidden(true)
-    }
+    } }
 }
 
 /// The Bilibili logo on its own, in the current foreground style, for use inline with text (chips),
@@ -28,7 +28,7 @@ struct BilibiliMark: View {
 struct BilibiliGlyph: View {
     var size: CGFloat = 15
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         #if os(tvOS)
         let size = max(size, 28)
         #endif
@@ -38,5 +38,5 @@ struct BilibiliGlyph: View {
             .aspectRatio(contentMode: .fit)
             .frame(width: size, height: size)
             .accessibilityHidden(true)
-    }
+    } }
 }

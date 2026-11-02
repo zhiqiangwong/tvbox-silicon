@@ -4,7 +4,7 @@ import TVCore
 
 /// Tells people when a new version is out and, after they update, what it brings.
 /// Reads the release feed the website publishes; the bundled copy covers offline launches.
-@MainActor @Observable final class Updates {
+@MainActor @Perceptible final class Updates {
     enum Sheet: Identifiable {
         /// Newer releases to install, newest first.
         case available([ReleaseFeed.Release])
@@ -56,9 +56,28 @@ import TVCore
         }
         return L10n.text("New build (%@) in TestFlight", String(live))
     }
+    /// Whether this OS requires a verified iOS 16-compatible build instead of installing the upstream iOS 17+ IPA directly.
+    static var requiresCompatibleBuild: Bool {
+        #if os(iOS)
+        if #available(iOS 17, *) { return false }
+        return true
+        #else
+        return false
+        #endif
+    }
+
+    /// Compatibility guidance shown on iOS 16 when a newer upstream release is available.
+    var compatibilityNotice: String? {
+        guard Self.channel == .direct else { return nil }
+        return feed.resolveUpdate(after: current, requiresCompatibleBuild: Self.requiresCompatibleBuild).compatibilityGuidance
+    }
+
     /// Where Get the Update goes: the release's download, or the TestFlight app, which installs the new build.
+    /// On iOS 16, direct downloads of unverified upstream iOS 17+ packages are suppressed in favour of compatibility guidance.
     func link(for release: ReleaseFeed.Release) -> URL? {
-        Self.channel == .testFlight ? feed.testflight?[ReleaseFeed.platform]?.link : release.link()
+        if Self.channel == .testFlight { return feed.testflight?[ReleaseFeed.platform]?.link }
+        guard !Self.requiresCompatibleBuild else { return nil }
+        return release.link()
     }
     var sheet: Sheet?
     /// Result of a check someone asked for.
@@ -215,7 +234,7 @@ struct ReleaseNotesView: View {
         return (update == nil ? updates.displayVersion : updates.latestVersion) ?? ""
     }
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         ZStack(alignment: .top) {
             Color.black.ignoresSafeArea()
             ReleaseBackdrop(animated: !reduceMotion)
@@ -228,7 +247,7 @@ struct ReleaseNotesView: View {
         #if os(macOS)
         .frame(width: 780).fixedSize(horizontal: false, vertical: true)
         #endif
-    }
+    } }
 
     @ViewBuilder private var layout: some View {
         #if os(iOS)
@@ -289,6 +308,7 @@ struct ReleaseNotesView: View {
 
     private var subtitle: String {
         if update == nil { return L10n.text("Here's what's new in version %@.", version) }
+        if let notice = updates.compatibilityNotice { return notice }
         guard testFlight else { return L10n.text("Yingxia %@ is ready with new features.", version) }
         #if os(tvOS)
         return L10n.text("Yingxia %@ is ready in TestFlight. Open TestFlight on this Apple TV and update Yingxia to get these features.", version)
@@ -447,7 +467,7 @@ private struct ReleaseArt: View {
         [Color(red: 1.0, green: 0.82, blue: 0.32), Color(red: 0.88, green: 0.38, blue: 0.12)],
         [Color(red: 1.0, green: 0.45, blue: 0.62), Color(red: 0.45, green: 0.12, blue: 0.42)],
     ]
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         let colors = Self.palettes[index % Self.palettes.count]
         GeometryReader { geometry in
             ZStack {
@@ -463,7 +483,7 @@ private struct ReleaseArt: View {
         .clipShape(RoundedRectangle(cornerRadius: Self.radius, style: .continuous))
         .overlay { RoundedRectangle(cornerRadius: Self.radius, style: .continuous).strokeBorder(.white.opacity(0.12)) }
         .accessibilityHidden(true)
-    }
+    } }
     static var radius: CGFloat {
         #if os(tvOS)
         16
@@ -479,7 +499,7 @@ private struct ReleaseBackdrop: View {
     var animated: Bool
     private static let top = [Color(red: 0.16, green: 0.62, blue: 0.98), Color(red: 0.10, green: 0.30, blue: 0.86), Color(red: 0.20, green: 0.12, blue: 0.56)]
     private static let middle = [Color(red: 0.04, green: 0.22, blue: 0.46), Color(red: 0.06, green: 0.12, blue: 0.38), Color(red: 0.06, green: 0.05, blue: 0.22)]
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         TimelineView(.animation(minimumInterval: 1 / 30, paused: !animated)) { context in
             let drift = Float(sin(context.date.timeIntervalSinceReferenceDate * 0.3)) * 0.12
             if #available(iOS 18, tvOS 18, *) {
@@ -499,7 +519,7 @@ private struct ReleaseBackdrop: View {
         }
         .overlay { LinearGradient(colors: [.black.opacity(0.1), .black.opacity(0.35), .black], startPoint: .top, endPoint: .bottom) }
         .accessibilityHidden(true)
-    }
+    } }
 }
 
 #if !os(tvOS)
@@ -534,7 +554,7 @@ private struct MacInstallActions: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         switch installer.phase {
         case .idle, .ready:
             HStack(spacing: 12) {
@@ -577,7 +597,7 @@ private struct MacInstallActions: View {
             }
             .frame(minHeight: PillButtonStyle.height)
         }
-    }
+    } }
 
     private var notNow: some View {
         Button { installer.clearFailure(); dismiss() } label: { Text(L10n.text("Not Now")) }
@@ -604,12 +624,12 @@ private struct MacInstallActions: View {
 
 /// The small "New" capsule on the Settings entry while an update waits.
 struct NewBadge: View {
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         Text(L10n.text("New"))
             .font(.caption2.weight(.bold)).foregroundStyle(Brand.onAccent)
             .padding(.horizontal, 7).padding(.vertical, 2)
             .background(Brand.accent, in: Capsule())
-    }
+    } }
 }
 
 extension View {
@@ -629,7 +649,7 @@ private struct UpdatePresentation: ViewModifier {
     @State private var id = UUID()
     #endif
 
-    func body(content: Content) -> some View {
+    func body(content: Content) -> some View { AppPerceptionTracking {
         let pending = updates.sheet != nil || updates.message != nil
         #if os(macOS)
         let shown = !playing && updates.presenter == id
@@ -646,11 +666,11 @@ private struct UpdatePresentation: ViewModifier {
         #else
         let presented = content.fullScreenCover(item: item) { ReleaseNotesView(sheet: $0).environment(updates) }
         #endif
-        return presented
+        presented
         .alert(L10n.text("Software Update"), isPresented: Binding(get: { shown && updates.message != nil }, set: { if !$0 { updates.message = nil } })) {
             Button(L10n.text("OK"), role: .cancel) { updates.message = nil }
         } message: { Text(updates.message ?? "") }
-    }
+    } }
 }
 
 enum QRCode {

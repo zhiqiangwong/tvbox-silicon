@@ -13,7 +13,7 @@ struct MusicDownloadsView: View {
     /// Most recently saved first.
     private var saved: [MusicDownload] { library.completed.sorted { ($0.finished ?? $0.created) > ($1.finished ?? $1.created) } }
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         let tracks = saved.map(\.track)
         let page = list(tracks)
             .screenBackdrop()
@@ -51,7 +51,7 @@ struct MusicDownloadsView: View {
                 }
                 #endif
         }
-    }
+    } }
 
     private func list(_ tracks: [MusicTrack]) -> some View {
         let pending = library.pending
@@ -59,8 +59,8 @@ struct MusicDownloadsView: View {
             LazyVStack(alignment: .leading, spacing: MusicLayout.rowSpacing) {
                 header(tracks).padding(.bottom, 20)
                 if library.items.isEmpty {
-                    ContentUnavailableView(L10n.text("No Downloaded Songs"), systemImage: "arrow.down.circle",
-                                           description: Text(L10n.text("Download a song, album or playlist from its menu to listen without a connection.")))
+                    AppContentUnavailableView(L10n.text("No Downloaded Songs"), systemImage: "arrow.down.circle",
+                                              description: Text(L10n.text("Download a song, album or playlist from its menu to listen without a connection.")))
                         .frame(maxWidth: .infinity).padding(.vertical, 60)
                 }
                 if !pending.isEmpty {
@@ -118,7 +118,7 @@ struct MusicDownloadsView: View {
                         ForEach(collections) { MusicDownloadedTile(entry: $0, size: Self.tile) }
                     }
                 }
-                .scrollClipDisabled()
+                .scrollClipDisabledCompat()
             }
             .padding(.top, 24)
             .tvFocusSection()
@@ -166,7 +166,7 @@ struct MusicDownloadedCollectionView: View {
     @State private var confirmsRemove = false
     private var library: MusicDownloadLibrary { .shared }
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         if let entry = library.collection(id: id) {
             let collection = entry.collection
             let items = library.items(in: entry)
@@ -218,9 +218,9 @@ struct MusicDownloadedCollectionView: View {
                 Button(L10n.text("Remove Download"), role: .destructive) { library.remove(collection: id); dismiss() }
             }
         } else {
-            ContentUnavailableView(L10n.text("No Downloaded Songs"), systemImage: "arrow.down.circle").screenBackdrop()
+            AppContentUnavailableView(L10n.text("No Downloaded Songs"), systemImage: "arrow.down.circle").screenBackdrop()
         }
-    }
+    } }
 
     private func header(_ collection: MusicCollection, _ tracks: [MusicTrack]) -> some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -265,7 +265,7 @@ private struct MusicDownloadedTile: View {
     let size: CGFloat
     @State private var hovering = false
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         let collection = entry.collection
         let saved = MusicDownloadLibrary.shared.items(in: entry).filter { $0.status == .completed }.count
         let link = RouteLink { MusicDownloadedCollectionView(id: entry.id) } label: {
@@ -288,7 +288,7 @@ private struct MusicDownloadedTile: View {
             .onHover { hovering = $0 }
             .animation(.easeOut(duration: 0.15), value: hovering)
         #endif
-    }
+    } }
 
     #if os(tvOS)
     private static let titleFont = Font.system(size: 24, weight: .semibold), subtitleFont = Font.system(size: 20)
@@ -301,7 +301,7 @@ private struct MusicDownloadedTile: View {
 private struct MusicPendingActions: View {
     let pending: [MusicDownload]
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         let library = MusicDownloadLibrary.shared
         let paused = library.isPaused
         HStack(spacing: 8) {
@@ -327,7 +327,7 @@ private struct MusicPendingActions: View {
         .buttonStyle(.bordered).buttonBorderShape(.capsule).controlSize(.small)
         #endif
         .fixedSize()
-    }
+    } }
 }
 
 /// A song on its way: how far it got, or why it stopped, with Retry and Cancel. On Apple TV the row
@@ -336,7 +336,7 @@ private struct MusicPendingRow: View {
     let item: MusicDownload
     @State private var choosing = false
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         #if os(tvOS)
         Button { choosing = true } label: { row.contentShape(.rect) }
             .glassRow()
@@ -347,7 +347,7 @@ private struct MusicPendingRow: View {
         #else
         row
         #endif
-    }
+    } }
 
     private var row: some View {
         HStack(spacing: MusicLayout.gap) {
@@ -401,7 +401,7 @@ struct MusicDownloadsLink: View {
     /// On the Downloads page it sits among cards, so it is one too.
     var card = false
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         let library = MusicDownloadLibrary.shared
         RouteLink { MusicDownloadsView() } label: {
             HStack(spacing: MusicLayout.gap) {
@@ -427,7 +427,7 @@ struct MusicDownloadsLink: View {
             .contentShape(Rectangle())
         }
         .glassRow()
-    }
+    } }
 
     private func details(_ library: MusicDownloadLibrary) -> String {
         var parts = [L10n.text("%lld songs", library.completed.count)]
@@ -443,7 +443,7 @@ struct MusicDownloadsLink: View {
 struct MusicDownloadMenuItems: View {
     let tracks: [MusicTrack]
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         let library = MusicDownloadLibrary.shared
         let saved = tracks.compactMap { library.item(for: $0) }
         if !tracks.isEmpty, saved.count == tracks.count {
@@ -453,7 +453,7 @@ struct MusicDownloadMenuItems: View {
         } else {
             Button { library.download(tracks) } label: { Label(L10n.text("Download"), systemImage: "arrow.down.circle") }
         }
-    }
+    } }
 }
 
 /// Downloads an album's or playlist's songs; a check once they are all saved.
@@ -464,7 +464,7 @@ struct MusicDownloadButton: View {
     /// The Mac header's buttons have a fixed size.
     var side: CGFloat?
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         let library = MusicDownloadLibrary.shared
         let items = tracks.compactMap { library.item(for: $0) }
         // Songs saved one by one before still leave the button on until the album or playlist is kept too.
@@ -481,5 +481,5 @@ struct MusicDownloadButton: View {
         }
         .disabled(tracks.isEmpty || queued)
         .help(label).accessibilityLabel(label)
-    }
+    } }
 }

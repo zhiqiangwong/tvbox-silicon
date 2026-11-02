@@ -17,11 +17,11 @@ case "$TARGET" in
   tvos-simulator) FAMILY=tvOS; PLATFORM=appletvsimulator; SLICE=tvos-arm64_x86_64-simulator ;;
   *) echo "Usage: $0 [ios|ios-simulator|tvos|tvos-simulator]" >&2; exit 2 ;;
 esac
+source "$PWD/Scripts/apple-deployment-targets.sh"
 VERSION=3.14; SUPPORT=b13
-MINIMUM_OS=17.0  # the apps' deployment target in project.yml
 case "$FAMILY" in
-  iOS) SHA256=ce1c68affa1cbd9c5611a0f4a013e412f14a760cf22c6bb58cfb4d893073bd45 ;;
-  tvOS) SHA256=72380111fcf9362b587b30e1fdf31df4ca8d6d0f72f46054eb7e3673d61f44d1 ;;
+  iOS) MINIMUM_OS="$IOS_DEPLOYMENT_TARGET"; SHA256=ce1c68affa1cbd9c5611a0f4a013e412f14a760cf22c6bb58cfb4d893073bd45 ;;
+  tvOS) MINIMUM_OS="$TVOS_DEPLOYMENT_TARGET"; SHA256=72380111fcf9362b587b30e1fdf31df4ca8d6d0f72f46054eb7e3673d61f44d1 ;;
 esac
 # Bytecode and the libraries' tags must match the embedded interpreter's minor version.
 HOST_PYTHON="${HOST_PYTHON:-$(command -v python$VERSION || true)}"
@@ -120,9 +120,9 @@ find "$DEST/python" "$DEST/PythonHost" -name '*.so' | sort | while read -r libra
   echo "$framework/$module" > "${library%.so}.fwork"
   echo "${relative%.so}.fwork" > "$DEST/$framework/$module.origin"
 done
-# BeeWare's templates say iOS 13 / tvOS 9, but our wheels target 17.0, some tvOS modules 12.0 and the simulator's
-# Python.framework 14.0. App Store processing rejects a framework whose binary needs a newer OS than its
-# MinimumOSVersion (ITMS-90208), so declare the app's deployment target, which covers them all.
+# BeeWare's templates say iOS 13 / tvOS 9, while our wheels target the platform deployment target (16.0 on iOS, 17.0 on tvOS),
+# some tvOS modules 12.0 and the simulator's Python.framework 14.0. App Store processing rejects a framework whose binary needs a
+# newer OS than its MinimumOSVersion (ITMS-90208), so declare the app's deployment target, which covers them all.
 # _ssl and _hashlib link OpenSSL, which Apple lists as a commonly used third-party SDK: TestFlight review rejects
 # a framework holding it without a privacy manifest (ITMS-91061). Every module framework gets one (no tracking,
 # no data collected, no required-reason APIs), so a module flagged later is covered too.
@@ -135,4 +135,5 @@ for framework in "$DEST/Frameworks/"*.framework; do
   [ "$(printf '%s\n%s\n' "$needed" "$declared" | sort -V | tail -1)" = "$declared" ] ||
     { echo "$(basename "$framework") needs $FAMILY $needed but declares $declared" >&2; exit 1; }
 done
+echo "$PLATFORM:$MINIMUM_OS" > "$DEST/.deployment-target"
 echo "Embedded Python $VERSION ($FAMILY $SUPPORT) for $PLATFORM: $DEST ($(du -sh "$DEST" | cut -f1))"

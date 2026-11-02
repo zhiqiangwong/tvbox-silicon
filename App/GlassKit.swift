@@ -104,13 +104,25 @@ extension View {
     @ViewBuilder func onScrolledIntoView(threshold: Double, _ action: @escaping (Bool) -> Void) -> some View {
         if #available(iOS 18, tvOS 18, *) {
             onScrollVisibilityChange(threshold: threshold, action)
-        } else {
+        } else if #available(iOS 17, *) {
             onGeometryChange(for: Bool.self) { geometry in
                 let own = CGRect(origin: .zero, size: geometry.size)
                 guard own.width * own.height > 0, let viewport = geometry.bounds(of: .scrollView) else { return false }
                 let shown = own.intersection(viewport)
                 return !shown.isNull && shown.width * shown.height >= own.width * own.height * threshold
             } action: { action($0) }
+        } else {
+            #if os(iOS)
+            onGeometryChange(for: Bool.self) { geometry in
+                let frame = geometry.frame(in: .global)
+                guard frame.width * frame.height > 0 else { return false }
+                let screen = UIScreen.main.bounds
+                let shown = frame.intersection(screen)
+                return !shown.isNull && shown.width * shown.height >= frame.width * frame.height * threshold
+            } action: { action($0) }
+            #else
+            self
+            #endif
         }
     }
 
@@ -125,9 +137,414 @@ extension View {
     @ViewBuilder func breathingSymbol() -> some View {
         if #available(iOS 18, tvOS 18, *) {
             symbolEffect(.breathe, options: .repeat(.periodic(delay: 2.5)))
-        } else {
+        } else if #available(iOS 17, *) {
             symbolEffect(.pulse, options: .repeating.speed(0.4))
+        } else {
+            self
         }
+    }
+}
+
+// MARK: - iOS 16 Compatibility Helpers
+
+private struct OnChangeTwoArgCompat<V: Equatable>: ViewModifier {
+    let value: V
+    let initial: Bool
+    let action: (V, V) -> Void
+    @State private var previous: V?
+    @State private var hasAppeared = false
+
+    func body(content: Content) -> some View {
+        content
+            .onAppear {
+                if !hasAppeared {
+                    hasAppeared = true
+                    previous = value
+                    if initial {
+                        action(value, value)
+                    }
+                }
+            }
+            .onChange(of: value) { newValue in
+                let oldValue = previous ?? newValue
+                previous = newValue
+                action(oldValue, newValue)
+            }
+    }
+}
+
+private struct OnChangeZeroArgCompat<V: Equatable>: ViewModifier {
+    let value: V
+    let initial: Bool
+    let action: () -> Void
+    @State private var hasAppeared = false
+
+    func body(content: Content) -> some View {
+        content
+            .onAppear {
+                if !hasAppeared {
+                    hasAppeared = true
+                    if initial {
+                        action()
+                    }
+                }
+            }
+            .onChange(of: value) { _ in
+                action()
+            }
+    }
+}
+
+private struct ScrollPositionCompatModifier<ID: Hashable>: ViewModifier {
+    @Binding var id: ID?
+    let anchor: UnitPoint
+
+    func body(content: Content) -> some View {
+        ScrollViewReader { proxy in
+            AppPerceptionTracking {
+                content
+                    .onAppear {
+                        if let target = id {
+                            proxy.scrollTo(target, anchor: anchor)
+                        }
+                    }
+                    .onChangeCompat(of: id) { _, target in
+                        if let target {
+                            withAnimation(.easeInOut(duration: 0.35)) {
+                                proxy.scrollTo(target, anchor: anchor)
+                            }
+                        }
+                    }
+            }
+        }
+    }
+}
+
+enum AppHapticKind {
+    case selection
+    case lightImpact
+    case mediumImpact
+}
+
+extension View {
+    @ViewBuilder func onChangeCompat<V: Equatable>(
+        of value: V,
+        initial: Bool = false,
+        _ action: @escaping (_ oldValue: V, _ newValue: V) -> Void
+    ) -> some View {
+        if #available(iOS 17, macOS 14, tvOS 17, *) {
+            onChange(of: value, initial: initial, action)
+        } else {
+            modifier(OnChangeTwoArgCompat(value: value, initial: initial, action: action))
+        }
+    }
+
+    @ViewBuilder func onChangeCompat<V: Equatable>(
+        of value: V,
+        initial: Bool = false,
+        _ action: @escaping () -> Void
+    ) -> some View {
+        if #available(iOS 17, macOS 14, tvOS 17, *) {
+            onChange(of: value, initial: initial, action)
+        } else {
+            modifier(OnChangeZeroArgCompat(value: value, initial: initial, action: action))
+        }
+    }
+
+    @ViewBuilder func symbolReplaceTransition() -> some View {
+        if #available(iOS 17, macOS 14, tvOS 17, *) {
+            contentTransition(.symbolEffect(.replace))
+        } else {
+            self
+        }
+    }
+
+    @ViewBuilder func symbolBounce<V: Equatable>(value: V) -> some View {
+        if #available(iOS 17, macOS 14, tvOS 17, *) {
+            symbolEffect(.bounce, value: value)
+        } else {
+            self
+        }
+    }
+
+    @ViewBuilder func numericTextTransition(value: Double) -> some View {
+        if #available(iOS 17, macOS 14, tvOS 17, *) {
+            contentTransition(.numericText(value: value))
+        } else {
+            contentTransition(.numericText())
+        }
+    }
+
+    @ViewBuilder func variableColorSymbol(isActive: Bool) -> some View {
+        if #available(iOS 17, macOS 14, tvOS 17, *) {
+            symbolEffect(.variableColor.iterative, isActive: isActive)
+        } else {
+            opacity(isActive ? 1 : 0.65)
+        }
+    }
+
+    @ViewBuilder func blurReplaceTransition() -> some View {
+        if #available(iOS 17, macOS 14, tvOS 17, *) {
+            transition(.blurReplace)
+        } else {
+            transition(.opacity)
+        }
+    }
+
+    @ViewBuilder func selectionHaptic<T: Equatable>(trigger: T) -> some View {
+        if #available(iOS 17, macOS 14, tvOS 17, *) {
+            #if !os(tvOS)
+            sensoryFeedback(.selection, trigger: trigger)
+            #else
+            self
+            #endif
+        } else {
+            #if os(iOS)
+            onChangeCompat(of: trigger) { _, _ in
+                UISelectionFeedbackGenerator().selectionChanged()
+            }
+            #else
+            self
+            #endif
+        }
+    }
+
+    @ViewBuilder func hapticFeedback<T: Equatable>(
+        trigger: T,
+        _ feedback: @escaping (_ oldValue: T, _ newValue: T) -> AppHapticKind?
+    ) -> some View {
+        if #available(iOS 17, macOS 14, tvOS 17, *) {
+            #if !os(tvOS)
+            sensoryFeedback(trigger: trigger) { old, new in
+                switch feedback(old, new) {
+                case .selection: .selection
+                case .lightImpact: .impact(weight: .light)
+                case .mediumImpact: .impact(weight: .medium)
+                case nil: nil
+                }
+            }
+            #else
+            self
+            #endif
+        } else {
+            #if os(iOS)
+            onChangeCompat(of: trigger) { old, new in
+                switch feedback(old, new) {
+                case .selection:
+                    UISelectionFeedbackGenerator().selectionChanged()
+                case .lightImpact:
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                case .mediumImpact:
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                case nil:
+                    break
+                }
+            }
+            #else
+            self
+            #endif
+        }
+    }
+
+    @ViewBuilder func scrollTargetLayoutCompat() -> some View {
+        if #available(iOS 17, macOS 14, tvOS 17, *) {
+            scrollTargetLayout()
+        } else {
+            self
+        }
+    }
+
+    @ViewBuilder func scrollPositionCompat<ID: Hashable>(id: Binding<ID?>, anchor: UnitPoint = .top) -> some View {
+        if #available(iOS 17, macOS 14, tvOS 17, *) {
+            scrollPosition(id: id, anchor: anchor)
+        } else {
+            modifier(ScrollPositionCompatModifier(id: id, anchor: anchor))
+        }
+    }
+
+    @ViewBuilder func scrollClipDisabledCompat() -> some View {
+        if #available(iOS 17, macOS 14, tvOS 17, *) {
+            scrollClipDisabled()
+        } else {
+            self
+        }
+    }
+
+    @ViewBuilder func horizontalScrollContentMargins(_ length: CGFloat) -> some View {
+        if #available(iOS 17, macOS 14, tvOS 17, *) {
+            contentMargins(.horizontal, length, for: .scrollContent)
+        } else {
+            padding(.horizontal, length)
+        }
+    }
+
+    @ViewBuilder func verticalContainerRelativeFraction(_ fraction: CGFloat) -> some View {
+        if #available(iOS 17, macOS 14, tvOS 17, *) {
+            containerRelativeFrame(.vertical, alignment: .center) { height, _ in height * fraction }
+        } else {
+            #if os(iOS)
+            frame(minHeight: UIScreen.main.bounds.height * (fraction * 0.85))
+            #else
+            self
+            #endif
+        }
+    }
+
+    @ViewBuilder func navigationDestinationCompat<D: Hashable, C: View>(
+        item: Binding<D?>,
+        @ViewBuilder destination: @escaping (D) -> C
+    ) -> some View {
+        if #available(iOS 17, macOS 14, tvOS 17, *) {
+            navigationDestination(item: item, destination: destination)
+        } else {
+            navigationDestination(
+                isPresented: Binding(
+                    get: { item.wrappedValue != nil },
+                    set: { if !$0 { item.wrappedValue = nil } }
+                )
+            ) {
+                WithPerceptionTracking {
+                    if let value = item.wrappedValue {
+                        destination(value)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder func sheetPresentationBackground<Background: View>(@ViewBuilder _ content: () -> Background) -> some View {
+        if #available(iOS 16.4, macOS 13.3, tvOS 16.4, *) {
+            presentationBackground(content: content)
+        } else {
+            self
+        }
+    }
+}
+
+struct AppPerceptionTracking<Content: View>: View {
+    private let content: () -> Content
+
+    init(@ViewBuilder content: @escaping () -> Content) {
+        self.content = content
+    }
+
+    var body: some View {
+        #if os(iOS)
+        if #available(iOS 17, *) {
+            content()
+        } else {
+            WithPerceptionTracking {
+                content()
+            }
+        }
+        #else
+        content()
+        #endif
+    }
+}
+
+struct AppContentUnavailableView<LabelContent: View, DescriptionContent: View, ActionsContent: View>: View {
+    fileprivate enum Spec {
+        case standard(title: String, systemImage: String, description: Text?)
+        case search(String)
+    }
+
+    private let spec: Spec?
+    private let label: LabelContent
+    private let description: DescriptionContent
+    private let actions: ActionsContent
+
+    init(
+        @ViewBuilder label: () -> LabelContent,
+        @ViewBuilder description: () -> DescriptionContent = { EmptyView() },
+        @ViewBuilder actions: () -> ActionsContent = { EmptyView() }
+    ) {
+        self.spec = nil
+        self.label = label()
+        self.description = description()
+        self.actions = actions()
+    }
+
+    fileprivate init(
+        spec: Spec,
+        label: LabelContent,
+        description: DescriptionContent,
+        actions: ActionsContent
+    ) {
+        self.spec = spec
+        self.label = label
+        self.description = description
+        self.actions = actions
+    }
+
+    var body: some View {
+        if #available(iOS 17, macOS 14, tvOS 17, *) {
+            switch spec {
+            case .standard(let title, let systemImage, let description):
+                ContentUnavailableView(title, systemImage: systemImage, description: description)
+            case .search(let query):
+                ContentUnavailableView.search(text: query)
+            case nil:
+                ContentUnavailableView {
+                    label
+                } description: {
+                    description
+                } actions: {
+                    actions
+                }
+            }
+        } else {
+            VStack(spacing: 14) {
+                label
+                    .font(.title3.weight(.semibold))
+                    .multilineTextAlignment(.center)
+                description
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                actions
+                    .padding(.top, 4)
+            }
+            .padding(24)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+}
+
+struct AppUnavailableStandardLabel: View {
+    let title: String
+    let systemImage: String
+
+    var body: some View {
+        VStack(spacing: 10) {
+            Image(systemName: systemImage)
+                .font(.system(size: 40, weight: .regular))
+                .foregroundStyle(.secondary)
+            Text(title)
+        }
+    }
+}
+
+extension AppContentUnavailableView where LabelContent == AppUnavailableStandardLabel, DescriptionContent == Text?, ActionsContent == EmptyView {
+    init(_ title: String, systemImage: String, description: Text? = nil) {
+        self.init(
+            spec: .standard(title: title, systemImage: systemImage, description: description),
+            label: AppUnavailableStandardLabel(title: title, systemImage: systemImage),
+            description: description,
+            actions: EmptyView()
+        )
+    }
+}
+
+extension AppContentUnavailableView where LabelContent == AppUnavailableStandardLabel, DescriptionContent == Text, ActionsContent == EmptyView {
+    static func search(text: String) -> Self {
+        let title = text.isEmpty ? L10n.text("No Results") : L10n.text("No Results for “%@”", text)
+        return AppContentUnavailableView(
+            spec: .search(text),
+            label: AppUnavailableStandardLabel(title: title, systemImage: "magnifyingglass"),
+            description: Text(L10n.text("Check the spelling or try a new search.")),
+            actions: EmptyView()
+        )
     }
 }
 
@@ -135,13 +552,26 @@ extension Color {
     /// `mix(with:by:)`; before iOS 18 and tvOS 18 a plain blend in sRGB.
     func blend(with other: Color, by fraction: Double) -> Color {
         if #available(iOS 18, tvOS 18, *) { return mix(with: other, by: fraction) }
-        let environment = EnvironmentValues()
-        let from = resolve(in: environment), to = other.resolve(in: environment)
-        // Resolved components are linear; blending gamma-encoded values looks closer to mix's perceptual default.
-        func encoded(_ linear: Float) -> Double { Double(pow(max(0, linear), 1 / 2.2)) }
-        func mixed(_ a: Float, _ b: Float) -> Double { encoded(a) + (encoded(b) - encoded(a)) * fraction }
-        return Color(.sRGB, red: mixed(from.red, to.red), green: mixed(from.green, to.green), blue: mixed(from.blue, to.blue),
-                     opacity: Double(from.opacity + (to.opacity - from.opacity) * Float(fraction)))
+        if #available(iOS 17, *) {
+            let environment = EnvironmentValues()
+            let from = resolve(in: environment), to = other.resolve(in: environment)
+            // Resolved components are linear; blending gamma-encoded values looks closer to mix's perceptual default.
+            func encoded(_ linear: Float) -> Double { Double(pow(max(0, linear), 1 / 2.2)) }
+            func mixed(_ a: Float, _ b: Float) -> Double { encoded(a) + (encoded(b) - encoded(a)) * fraction }
+            return Color(.sRGB, red: mixed(from.red, to.red), green: mixed(from.green, to.green), blue: mixed(from.blue, to.blue),
+                         opacity: Double(from.opacity + (to.opacity - from.opacity) * Float(fraction)))
+        }
+        #if os(iOS)
+        var r1: CGFloat = 0, g1: CGFloat = 0, b1: CGFloat = 0, a1: CGFloat = 0
+        var r2: CGFloat = 0, g2: CGFloat = 0, b2: CGFloat = 0, a2: CGFloat = 0
+        UIColor(self).getRed(&r1, green: &g1, blue: &b1, alpha: &a1)
+        UIColor(other).getRed(&r2, green: &g2, blue: &b2, alpha: &a2)
+        let f = CGFloat(fraction)
+        return Color(.sRGB, red: Double(r1 + (r2 - r1) * f), green: Double(g1 + (g2 - g1) * f), blue: Double(b1 + (b2 - b1) * f),
+                     opacity: Double(a1 + (a2 - a1) * f))
+        #else
+        return self
+        #endif
     }
 }
 
@@ -1045,7 +1475,7 @@ struct ErrorStateCard: View {
         .frame(maxWidth: recoveryWidth)
         .contentPanel(cornerRadius: 28)
         .frame(maxWidth: .infinity)
-        .onChange(of: details) { showsDetails = false }
+        .onChangeCompat(of: details) { showsDetails = false }
     }
 
     private var recoveryWidth: CGFloat {

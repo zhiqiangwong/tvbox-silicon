@@ -7,7 +7,7 @@ struct CloudStreamsTests {
     /// A file the size of a few chunks whose bytes encode their own offset, behind a Range server.
     private func served(_ name: String, size: Int) async throws -> (url: URL, bytes: Data) {
         var bytes = Data(count: size)
-        bytes.withUnsafeMutableBytes { raw in for i in 0..<size { raw[i] = UInt8(truncatingIfNeeded: i &* 31 &+ i >> 9) } }
+        bytes.withUnsafeMutableBytes { (raw: UnsafeMutableRawBufferPointer) in for i in 0..<size { raw[i] = UInt8(truncatingIfNeeded: i &* 31 &+ i >> 9) } }
         bytes.replaceSubrange(0..<12, with: Data([0, 0, 0, 0x20, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6F, 0x6D]))
         return (RangeServer.add(name, bytes), bytes)
     }

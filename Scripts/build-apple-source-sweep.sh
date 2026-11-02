@@ -10,9 +10,10 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$PWD"; TARGET="${1:-tvos-simulator}"
+source "$ROOT/Scripts/apple-deployment-targets.sh"
 case "$TARGET" in
- ios-simulator) PLATFORM=iphonesimulator; TRIPLE=arm64-apple-ios17.0-simulator; FAMILY=1 ;;
- tvos-simulator) PLATFORM=appletvsimulator; TRIPLE=arm64-apple-tvos17.0-simulator; FAMILY=3 ;;
+ ios-simulator) PLATFORM=iphonesimulator; TRIPLE=arm64-apple-ios$IOS_DEPLOYMENT_TARGET-simulator; MINIMUM_OS="$IOS_DEPLOYMENT_TARGET"; FAMILY=1 ;;
+ tvos-simulator) PLATFORM=appletvsimulator; TRIPLE=arm64-apple-tvos$TVOS_DEPLOYMENT_TARGET-simulator; MINIMUM_OS="$TVOS_DEPLOYMENT_TARGET"; FAMILY=3 ;;
  *) echo "Unknown target $TARGET" >&2; exit 2 ;;
 esac
 OUT="$ROOT/build/AppleRuntime/$PLATFORM"
@@ -27,9 +28,9 @@ if [ -d "$PYTHON" ]; then
   rsync -a "$PYTHON/Frameworks" "$PYTHON/python" "$PYTHON/PythonHost" "$APP/"
   for framework in "$APP/Frameworks/"*.framework; do codesign --force --sign - "$framework"; done
 fi
-python3 - "$APP" "$FAMILY" "$WORK/SourceSweepMain.m" <<'PY'
+python3 - "$APP" "$FAMILY" "$WORK/SourceSweepMain.m" "$MINIMUM_OS" <<'PY'
 import pathlib,sys,plistlib
-app,family,main=pathlib.Path(sys.argv[1]),int(sys.argv[2]),pathlib.Path(sys.argv[3])
+app,family,main,min_os=pathlib.Path(sys.argv[1]),int(sys.argv[2]),pathlib.Path(sys.argv[3]),sys.argv[4]
 s=pathlib.Path('Runtime/AppleRuntime/Spike/main.m').read_text()
 a=s.index('static void runJVM(void) {');b=s.index('@interface SpikeSceneDelegate',a)
 s=s[:a]+r'''extern char *TVAppleRuntimeRequest(const char *, const char *);
@@ -69,7 +70,7 @@ static void runJVM(void) {
 
 '''+s[b:]
 main.write_text(s)
-info=dict(CFBundleIdentifier='com.tvbox.yingxia.SourceSweep',CFBundleExecutable='SourceSweep',CFBundleName='Source Sweep',CFBundleVersion='1',CFBundleShortVersionString='1.0',CFBundlePackageType='APPL',MinimumOSVersion='17.0',UIDeviceFamily=[family],UILaunchScreen={},NSAppTransportSecurity={'NSAllowsArbitraryLoads':True},UIApplicationSceneManifest={'UIApplicationSupportsMultipleScenes':False,'UISceneConfigurations':{'UIWindowSceneSessionRoleApplication':[{'UISceneConfigurationName':'Runtime','UISceneDelegateClassName':'SpikeSceneDelegate'}]}})
+info=dict(CFBundleIdentifier='com.tvbox.yingxia.SourceSweep',CFBundleExecutable='SourceSweep',CFBundleName='Source Sweep',CFBundleVersion='1',CFBundleShortVersionString='1.0',CFBundlePackageType='APPL',MinimumOSVersion=min_os,UIDeviceFamily=[family],UILaunchScreen={},NSAppTransportSecurity={'NSAllowsArbitraryLoads':True},UIApplicationSceneManifest={'UIApplicationSupportsMultipleScenes':False,'UISceneConfigurations':{'UIWindowSceneSessionRoleApplication':[{'UISceneConfigurationName':'Runtime','UISceneDelegateClassName':'SpikeSceneDelegate'}]}})
 (app/'Info.plist').write_bytes(plistlib.dumps(info))
 PY
 clang -target "$TRIPLE" -isysroot "$(xcrun --sdk "$PLATFORM" --show-sdk-path)" -c Runtime/AppleRuntime/Native/ApplePython.c -o "$WORK/ApplePython-$TARGET.o"

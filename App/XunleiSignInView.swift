@@ -13,13 +13,13 @@ struct XunleiSignInView: View {
     @State private var error: String?
     @FocusState private var codeFocused: Bool
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         #if os(iOS)
         phoneForm
         #else
         panel
         #endif
-    }
+    } }
 
     private var title: String { L10n.text("Sign In to %@", L10n.text("Xunlei")) }
     private var prompt: String {

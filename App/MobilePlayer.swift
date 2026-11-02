@@ -67,7 +67,7 @@ struct MobilePlayerView: View {
     /// The screen's brightness before the first slide changed it, put back when the player closes.
     @State private var brightnessBefore: CGFloat?
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         ZStack {
             PlayerLayerView(player: session.player, fills: fillsScreen, pip: pip).playerBleed(!inline)
             // The enhanced picture covers the layer's own, under everything else.
@@ -129,23 +129,25 @@ struct MobilePlayerView: View {
             if let brightnessBefore { screen?.brightness = brightnessBefore }
         }
         // Played here again (the Lock Screen, say): the other device no longer has it to itself.
-        .onChange(of: session.paused) { _, paused in if !paused { playingOn = nil } }
-        .onChange(of: nowPlayingState, initial: true) { nowPlaying.update(title: channel.name, session: session) }
-        .onChange(of: nowPlayingArtwork, initial: true) { _, artwork in nowPlaying.show(artwork, session: session) }
+        .onChangeCompat(of: session.paused) { _, paused in if !paused { playingOn = nil } }
+        .onChangeCompat(of: nowPlayingState, initial: true) { nowPlaying.update(title: channel.name, session: session) }
+        .onChangeCompat(of: nowPlayingArtwork, initial: true) { _, artwork in nowPlaying.show(artwork, session: session) }
         // Pausing ends the faster speed in the session; another episode or quality plays at the chosen one.
-        .onChange(of: session.boost == nil) { _, ended in if ended { boost = nil } }
-        .onChange(of: clock.item) { endBoost() }
-        .sensoryFeedback(trigger: boost) { old, new in
+        .onChangeCompat(of: session.boost == nil) { _, ended in if ended { boost = nil } }
+        .onChangeCompat(of: clock.item) { endBoost() }
+        .hapticFeedback(trigger: boost) { old, new in
             guard let new else { return nil }
-            guard let old else { return .impact(weight: .light) }
-            return new.locked != old.locked ? .impact(weight: .medium) : new.rate != old.rate ? .selection : nil
+            guard let old else { return .lightImpact }
+            return new.locked != old.locked ? .mediumImpact : new.rate != old.rate ? .selection : nil
         }
         .task(id: clock.item.map(ObjectIdentifier.init)) { await tracks.load(clock.item) }
         .sheet(isPresented: $showsDanmakuList) {
-            DanmakuListView(player: session.player, comments: session.danmaku) { showsDanmakuList = false }
-                .danmakuListPresentation()
+            AppPerceptionTracking {
+                DanmakuListView(player: session.player, comments: session.danmaku) { showsDanmakuList = false }
+                    .danmakuListPresentation()
+            }
         }
-    }
+    } }
 
     /// What the Lock Screen's Now Playing shows, besides the position the system runs on from the rate.
     private struct NowPlayingState: Equatable {
@@ -293,10 +295,10 @@ struct MobilePlayerView: View {
             VStack(spacing: 4) {
                 Image(systemName: skipped.forward ? "goforward.10" : "gobackward.10")
                     .font(.system(size: 30, weight: .medium))
-                    .symbolEffect(.bounce, value: skipped.total)
+                    .symbolBounce(value: skipped.total)
                 Text((skipped.forward ? "+" : "\u{2212}") + L10n.text("%lld s", Int(skipped.total)))
                     .font(.footnote.weight(.semibold).monospacedDigit())
-                    .contentTransition(.numericText(value: skipped.total))
+                    .numericTextTransition(value: skipped.total)
             }
             .foregroundStyle(.white)
             .frame(width: 96, height: 96)
@@ -591,7 +593,7 @@ struct MobilePlayerView: View {
             }
             Button { session.togglePlayback() } label: {
                 // Swapped as the music player's is.
-                Image(systemName: session.paused ? "play.fill" : "pause.fill").contentTransition(.symbolEffect(.replace))
+                Image(systemName: session.paused ? "play.fill" : "pause.fill").symbolReplaceTransition()
             }
                 .buttonStyle(PlayerCircleStyle(size: inline ? 50 : 68))
                 .accessibilityLabel(L10n.text(session.paused ? "Play" : "Pause"))
@@ -683,7 +685,7 @@ struct WatchCoverBackdrop: View {
     var loading = true
     /// What the wait has to say, by how long it has run (see `WaitSpinner`).
     var status: (@MainActor (TimeInterval) -> PlaybackWait)? = nil
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         ZStack {
             Color.black
             PosterImage(url: poster, headers: headers)
@@ -694,7 +696,7 @@ struct WatchCoverBackdrop: View {
             if loading { WaitSpinner(status: status) }
         }
         .clipped()
-    }
+    } }
 }
 
 /// A spinner first; once the wait has run `PlaybackWait.detailsAfter`, its line and small print along the bottom,
@@ -702,7 +704,7 @@ struct WatchCoverBackdrop: View {
 struct WaitSpinner: View {
     var status: (@MainActor (TimeInterval) -> PlaybackWait)?
     @State private var started = Date()
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         ZStack {
             ProgressView().controlSize(.large).tint(.white)
             if let status {
@@ -724,7 +726,7 @@ struct WaitSpinner: View {
         }
         .allowsHitTesting(false)
         .accessibilityElement(children: .combine)
-    }
+    } }
 }
 
 /// Where the iPhone and iPad player is drawn.
@@ -754,9 +756,9 @@ struct WatchPlayback {
 /// The full-screen player sets the app's appearance; one at the top of a page sets only its own.
 struct PlayerScheme: ViewModifier {
     let ownsScreen: Bool
-    func body(content: Content) -> some View {
+    func body(content: Content) -> some View { AppPerceptionTracking {
         if ownsScreen { content.preferredColorScheme(.dark) } else { content.environment(\.colorScheme, .dark) }
-    }
+    } }
 }
 
 extension View {
@@ -788,7 +790,7 @@ private struct SeekBar<Accessory: View>: View {
     @State private var fineness = 1.0
     @State private var width: CGFloat = 0
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         // Every display frame while it plays, as AVKit's bar does; paused, held or hidden, only when the clock changes.
         let follows = moving && clock.scrubbing == nil
         TimelineView(.animation(paused: !follows)) { _ in
@@ -800,8 +802,8 @@ private struct SeekBar<Accessory: View>: View {
             if drag == nil { accessory().frame(height: Self.timeRow).transition(.opacity) }
         }
         .animation(.easeOut(duration: 0.15), value: drag == nil)
-        .sensoryFeedback(.selection, trigger: fineness)
-    }
+        .selectionHaptic(trigger: fineness)
+    } }
 
     private func bar(_ position: Double) -> some View {
         let duration = clock.duration
@@ -1105,12 +1107,12 @@ private struct PlayerLayerView: UIViewRepresentable {
 }
 
 /// Picture in Picture for the player layer: the button, and carrying on in a floating window when the app is left.
-@MainActor @Observable final class PictureInPicture: NSObject, AVPictureInPictureControllerDelegate {
+@MainActor @Perceptible final class PictureInPicture: NSObject, AVPictureInPictureControllerDelegate {
     let supported = AVPictureInPictureController.isPictureInPictureSupported()
     private(set) var possible = false
     private(set) var active = false
-    @ObservationIgnored private var controller: AVPictureInPictureController?
-    @ObservationIgnored private var observation: NSKeyValueObservation?
+    @PerceptionIgnored private var controller: AVPictureInPictureController?
+    @PerceptionIgnored private var observation: NSKeyValueObservation?
 
     func attach(_ layer: AVPlayerLayer) {
         guard supported, controller == nil else { return }
@@ -1143,15 +1145,15 @@ private struct PlayerLayerView: UIViewRepresentable {
 }
 
 /// The playing item's position and duration, four times a second while it plays.
-@MainActor @Observable final class PlayerClock {
+@MainActor @Perceptible final class PlayerClock {
     private(set) var position: Double = 0
     /// Zero until the item has a finite duration.
     private(set) var duration: Double = 0
     private(set) var item: AVPlayerItem?
     /// Where the seek bar is held, until the precise seek it ends with lands.
     private(set) var scrubbing: Double?
-    @ObservationIgnored private weak var player: AVPlayer?
-    @ObservationIgnored private var token: Any?
+    @PerceptionIgnored private weak var player: AVPlayer?
+    @PerceptionIgnored private var token: Any?
 
     func attach(_ player: AVPlayer) {
         detach()
@@ -1176,12 +1178,12 @@ private struct PlayerLayerView: UIViewRepresentable {
 
     /// The frame the seek bar shows above its handle while dragged; nil until one is made, or where none can be.
     private(set) var preview: CGImage?
-    @ObservationIgnored private var generator: AVAssetImageGenerator?
-    @ObservationIgnored private var generatorItem: ObjectIdentifier?
+    @PerceptionIgnored private var generator: AVAssetImageGenerator?
+    @PerceptionIgnored private var generatorItem: ObjectIdentifier?
     /// An item AVFoundation made no frame from (an HLS stream, say): no more tries for it.
-    @ObservationIgnored private var previewless: ObjectIdentifier?
-    @ObservationIgnored private var generating = false
-    @ObservationIgnored private var nextPreview: Double?
+    @PerceptionIgnored private var previewless: ObjectIdentifier?
+    @PerceptionIgnored private var generating = false
+    @PerceptionIgnored private var nextPreview: Double?
 
     /// While dragging, only the bar, the time and the preview follow the finger; the playing video is left alone
     /// until the finger lifts (Telegram).
@@ -1254,7 +1256,7 @@ private struct PlayerLayerView: UIViewRepresentable {
 }
 
 /// The item's audio tracks and subtitles, for the options menu.
-@MainActor @Observable final class MediaTracks {
+@MainActor @Perceptible final class MediaTracks {
     struct Group {
         let group: AVMediaSelectionGroup
         let options: [AVMediaSelectionOption]
@@ -1263,7 +1265,7 @@ private struct PlayerLayerView: UIViewRepresentable {
     private(set) var legible: Group?
     /// Bumped by a selection, so the menus show the new choice.
     private var revision = 0
-    @ObservationIgnored private weak var item: AVPlayerItem?
+    @PerceptionIgnored private weak var item: AVPlayerItem?
 
     func load(_ item: AVPlayerItem?) async {
         self.item = item; audio = nil; legible = nil

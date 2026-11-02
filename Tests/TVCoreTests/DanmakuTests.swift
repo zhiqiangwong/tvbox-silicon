@@ -9,8 +9,11 @@ struct DanmakuTests {
         return bytes
     }
     private func element(ms: UInt64, mode: UInt64, color: UInt64, text: String) -> [UInt8] {
-        let body = [0x10] + varint(ms) + [0x18] + varint(mode) + [0x20] + varint(25) + [0x28] + varint(color)
-            + [0x32, 2, 0x61, 0x62] + [0x3A] + varint(UInt64(text.utf8.count)) + Array(text.utf8) + [0x49] + Array(repeating: 0, count: 8)
+        var body: [UInt8] = [0x10]
+        body += varint(ms) + [0x18] + varint(mode)
+        body += [0x20] + varint(25) + [0x28] + varint(color)
+        body += [0x32, 2, 0x61, 0x62, 0x3A] + varint(UInt64(text.utf8.count))
+        body += Array(text.utf8) + [0x49] + Array(repeating: 0, count: 8)
         return [0x0A] + varint(UInt64(body.count)) + body
     }
 

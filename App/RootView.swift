@@ -87,66 +87,68 @@ struct RootView: View {
         return busy
     }
     var body: some View {
-        @Bindable var store = store
-        Group {
-            #if os(macOS)
-            NavigationSplitView {
-                MacSidebar()
-                    .navigationSplitViewColumnWidth(min: 190, ideal: 216, max: 260)
-            } detail: {
-                // The music bar floats over every page while a song is loaded, as in Music.
-                // The stack stays put across sections. Rebuilding it resets the sidebar column, so a
-                // section change collapsed the sidebar while the new page was still a placeholder.
-                NavigationStack(path: $detailPath) { content(store.section).musicBar().routeDestinations() }
-                    .environment(\.openRoute) { detailPath.append($0) }
-            }
-            .onChange(of: store.section) { detailPath = NavigationPath() }
-            .overlay {
-                if nowPlayingShown { MusicMacNowPlaying().ignoresSafeArea().transition(.move(edge: .bottom)) }
-            }
-            .background { NowPlayingWindowChrome(active: hidesToolbar, store: store) }
-            .background { MusicMiniPlayerTrigger() }
-            .onChange(of: store.music.presentsPlayer && store.music.track != nil) { _, show in
-                // Hiding the toolbar moves the page under it. The player slides up over the window
-                // first and the toolbar goes once it is covered; closing brings the toolbar back
-                // before the player slides away.
-                if show {
-                    withAnimation(.spring(response: 0.45, dampingFraction: 0.92)) { nowPlayingShown = true } completion: {
-                        if nowPlayingShown { hidesToolbar = true }
-                    }
-                } else {
-                    hidesToolbar = false
-                    withAnimation(.spring(response: 0.4, dampingFraction: 1)) { nowPlayingShown = false }
+        AppPerceptionTracking {
+            @AppBindable var store = store
+            Group {
+                #if os(macOS)
+                NavigationSplitView {
+                    MacSidebar()
+                        .navigationSplitViewColumnWidth(min: 190, ideal: 216, max: 260)
+                } detail: {
+                    // The music bar floats over every page while a song is loaded, as in Music.
+                    // The stack stays put across sections. Rebuilding it resets the sidebar column, so a
+                    // section change collapsed the sidebar while the new page was still a placeholder.
+                    NavigationStack(path: $detailPath) { content(store.section).musicBar().routeDestinations() }
+                        .environment(\.openRoute) { detailPath.append($0) }
                 }
+                .onChange(of: store.section) { detailPath = NavigationPath() }
+                .overlay {
+                    if nowPlayingShown { MusicMacNowPlaying().ignoresSafeArea().transition(.move(edge: .bottom)) }
+                }
+                .background { NowPlayingWindowChrome(active: hidesToolbar, store: store) }
+                .background { MusicMiniPlayerTrigger() }
+                .onChange(of: store.music.presentsPlayer && store.music.track != nil) { _, show in
+                    // Hiding the toolbar moves the page under it. The player slides up over the window
+                    // first and the toolbar goes once it is covered; closing brings the toolbar back
+                    // before the player slides away.
+                    if show {
+                        withAnimation(.spring(response: 0.45, dampingFraction: 0.92)) { nowPlayingShown = true } completion: {
+                            if nowPlayingShown { hidesToolbar = true }
+                        }
+                    } else {
+                        hidesToolbar = false
+                        withAnimation(.spring(response: 0.4, dampingFraction: 1)) { nowPlayingShown = false }
+                    }
+                }
+                #else
+                // The system tab bar on every size class: iOS 26 floats it over content and
+                // collapses extra sections into More, which a hand-built bar imitated poorly.
+                platformTabs
+                #endif
             }
-            #else
-            // The system tab bar on every size class: iOS 26 floats it over content and
-            // collapses extra sections into More, which a hand-built bar imitated poorly.
-            platformTabs
+            .onChangeCompat(of: store.section) { _, section in
+                if section != .search { store.searchModel.suspend() }
+            }
+            // A Baidu or Aliyun line waiting for its plugin's sign-in code to be scanned.
+            .sheet(item: Binding(get: { PluginSignIn.shared.prompt }, set: { if $0 == nil { PluginSignIn.shared.dismiss() } })) {
+                PluginSignInView(prompt: $0)
+            }
+            #if os(tvOS)
+            .fullScreenCover(isPresented: Binding(get: { store.music.presentsPlayer }, set: { store.music.presentsPlayer = $0 })) { MusicPlayerScreen() }
             #endif
+            // A video and a song never play over each other.
+            .onChangeCompat(of: store.playing) { _, channel in if channel != nil { store.music.pause() } }
+            .modifier(PlayerPresentation(playing: $store.playing))
+            #if os(tvOS) || os(macOS)
+            // What another device sent, while it opens.
+            .overlay { PlayOnIncoming().animation(.spring(duration: 0.4), value: PlayOnController.shared.incoming?.title) }
+            #endif
+            .updatePresentation(updates, playing: store.playing != nil)
+            .announcementPresentation(announcements, blocked: messageWaits)
+            .alert(L10n.text("Unable to Complete"), isPresented: Binding(get: { store.error != nil }, set: { if !$0 { store.error = nil } })) {
+                Button(L10n.text("OK"), role: .cancel) { store.error = nil }
+            } message: { Text(store.error ?? "") }
         }
-        .onChange(of: store.section) { _, section in
-            if section != .search { store.searchModel.suspend() }
-        }
-        // A Baidu or Aliyun line waiting for its plugin's sign-in code to be scanned.
-        .sheet(item: Binding(get: { PluginSignIn.shared.prompt }, set: { if $0 == nil { PluginSignIn.shared.dismiss() } })) {
-            PluginSignInView(prompt: $0)
-        }
-        #if os(tvOS)
-        .fullScreenCover(isPresented: Binding(get: { store.music.presentsPlayer }, set: { store.music.presentsPlayer = $0 })) { MusicPlayerScreen() }
-        #endif
-        // A video and a song never play over each other.
-        .onChange(of: store.playing) { _, channel in if channel != nil { store.music.pause() } }
-        .modifier(PlayerPresentation(playing: $store.playing))
-        #if os(tvOS) || os(macOS)
-        // What another device sent, while it opens.
-        .overlay { PlayOnIncoming().animation(.spring(duration: 0.4), value: PlayOnController.shared.incoming?.title) }
-        #endif
-        .updatePresentation(updates, playing: store.playing != nil)
-        .announcementPresentation(announcements, blocked: messageWaits)
-        .alert(L10n.text("Unable to Complete"), isPresented: Binding(get: { store.error != nil }, set: { if !$0 { store.error = nil } })) {
-            Button(L10n.text("OK"), role: .cancel) { store.error = nil }
-        } message: { Text(store.error ?? "") }
     }
 
     #if !os(macOS)
@@ -155,7 +157,13 @@ struct RootView: View {
     /// iPhone screen uses it, not only compact ones: iPhone Duo's inner display is regular both ways, and there
     /// the full set of sections overflowed the side tab bar into the system's own More list, without the editor.
     @AppStorage(PhoneTabs.labelsKey) private var showsTabLabels = true
-    private var phoneTabs: Bool { sizeClass == .compact || UIDevice.current.userInterfaceIdiom == .phone }
+    private var phoneTabs: Bool {
+        // iOS 16 iPad uses the existing compact bar and More navigation, even full-screen.
+        if #available(iOS 17, *) {
+            return sizeClass == .compact || UIDevice.current.userInterfaceIdiom == .phone
+        }
+        return true
+    }
     /// Sections a phone reaches through More, as arranged in the tab bar editor.
     private var inMore: [AppSection] { PhoneTabs(stored: storedTabs).arranged(slots: barSlots, hiding: store.hiddenSections).more }
     private var barSlots: Int { PhoneTabs.slots(horizontal: sizeClass, vertical: verticalSizeClass) }
@@ -183,19 +191,19 @@ struct RootView: View {
             .musicAccessory(enabled: store.music.track != nil && phoneTabs)
             // Opened from the mini player; swiping down closes it, as in Music.
             .sheet(isPresented: Binding(get: { store.music.presentsPlayer }, set: { store.music.presentsPlayer = $0 })) { MusicNowPlayingScreen() }
-            .onChange(of: store.section) { _, section in
+            .onChangeCompat(of: store.section) { _, section in
                 if phoneTabs && inMore.contains(section) {
                     moreSection = section; morePath = NavigationPath([section])
                     store.section = .more
                 }
             }
             // Closing iPhone Duo narrows the side bar back to four: a section that just left it opens inside More.
-            .onChange(of: barSlots) { _, _ in
+            .onChangeCompat(of: barSlots) { _, _ in
                 if phoneTabs && inMore.contains(store.section) {
                     moreSection = store.section; morePath = NavigationPath([store.section]); store.section = .more
                 }
             }
-            .onChange(of: phoneTabs) { _, phone in
+            .onChangeCompat(of: phoneTabs) { _, phone in
                 if !phone && store.section == .more { store.section = morePath.isEmpty ? .settings : moreSection }
                 else if phone && inMore.contains(store.section) {
                     moreSection = store.section; morePath = NavigationPath([store.section]); store.section = .more
@@ -205,7 +213,7 @@ struct RootView: View {
     }
 
     @ViewBuilder private var tabView: some View {
-        @Bindable var store = store
+        @AppBindable var store = store
         if #available(iOS 18, tvOS 18, *) {
             TabView(selection: $store.section) {
                 ForEach(tabs) { item in
@@ -339,24 +347,28 @@ private struct PlayerPresentation: ViewModifier {
     @State private var playerWindow = PlayerWindowController()
     #endif
     func body(content: Content) -> some View {
-        #if os(macOS)
-        content.onChange(of: playing, initial: true) { _, channel in
-            if let channel {
-                playerWindow.present(channel, store: store) { playing = nil }
-            } else {
-                playerWindow.close()
+        AppPerceptionTracking {
+            #if os(macOS)
+            content.onChange(of: playing, initial: true) { _, channel in
+                if let channel {
+                    playerWindow.present(channel, store: store) { playing = nil }
+                } else {
+                    playerWindow.close()
+                }
             }
+            #else
+            // One presentation while anything plays: the next episode replaces the channel inside the player.
+            // Keyed by the channel, every change dismissed the player and presented a new one, so even a
+            // queued episode would stop and load.
+            // An iPhone watch page plays its own video at the top of the page (`VideoDetailView`).
+            content.fullScreenCover(item: Binding(get: { store.playsInWatchPage(playing) ? nil : playing.map(PlayerSlot.init) },
+                                                  set: { if $0 == nil, !store.playsInWatchPage(playing) { playing = nil } })) { slot in
+                AppPerceptionTracking {
+                    PlaybackView(channel: slot.channel)
+                }
+            }
+            #endif
         }
-        #else
-        // One presentation while anything plays: the next episode replaces the channel inside the player.
-        // Keyed by the channel, every change dismissed the player and presented a new one, so even a
-        // queued episode would stop and load.
-        // An iPhone watch page plays its own video at the top of the page (`VideoDetailView`).
-        content.fullScreenCover(item: Binding(get: { store.playsInWatchPage(playing) ? nil : playing.map(PlayerSlot.init) },
-                                              set: { if $0 == nil, !store.playsInWatchPage(playing) { playing = nil } })) {
-            PlaybackView(channel: $0.channel)
-        }
-        #endif
     }
 }
 
@@ -504,7 +516,7 @@ extension View {
         #if os(macOS)
         navigationDestination(for: Route.self) { $0.build().musicBar() }
         #else
-        navigationDestination(for: Route.self) { $0.build() }
+        navigationDestination(for: Route.self) { route in AppPerceptionTracking { route.build() } }
         #endif
     }
 }

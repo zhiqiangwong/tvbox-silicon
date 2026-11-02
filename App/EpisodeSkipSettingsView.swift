@@ -21,7 +21,7 @@ struct EpisodeSkipSettingsView: View {
         return draft.validationError(duration: session.duration)
     }
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         NavigationStack {
             Form {
                 Section {
@@ -81,7 +81,7 @@ struct EpisodeSkipSettingsView: View {
         #else
         .presentationDetents([.large])
         #endif
-    }
+    } }
 
     private func timeField(_ title: String, text: Binding<String>, identifier: String) -> some View {
         TextField(title, text: text, prompt: Text("01:30"))

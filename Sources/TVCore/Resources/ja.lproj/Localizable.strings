@@ -1129,3 +1129,7 @@
 "Top Half" = "上半分";
 "Top Three Quarters" = "上 3/4";
 "Whole Screen" = "全画面";
+"No Results" = "結果なし";
+"No Results for “%@”" = "“%@”に一致する結果はありません";
+"Check the spelling or try a new search." = "スペルを確認するか、新しい検索を試してください。";
+"Yingxia %@ is available upstream. iOS 16 requires a verified iOS 16-compatible build rather than the default iOS 17+ release package." = "上流で Yingxia %@ が公開されています。iOS 16 では既定の iOS 17+ パッケージではなく、検証済みの iOS 16 互換ビルドが必要です。";

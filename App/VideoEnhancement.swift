@@ -72,26 +72,26 @@ private protocol EnhancementEngine: AnyObject, Sendable {
 }
 
 /// One per playback session: follows the player's item and owns the layer the surfaces show.
-@MainActor @Observable final class VideoEnhancer {
+@MainActor @Perceptible final class VideoEnhancer {
     /// What is on screen now: processed frames drawn over AVKit's picture.
     private(set) var status = VideoEnhancementStatus()
     /// A line for logs and QA: the processors running, frame counts and timing.
     private(set) var summary = "off"
-    @ObservationIgnored let layer = AVSampleBufferDisplayLayer()
-    @ObservationIgnored private weak var player: AVPlayer?
-    @ObservationIgnored private var engine: (any EnhancementEngine)?
-    @ObservationIgnored private var item: AVPlayerItem?
-    @ObservationIgnored private var output: AVPlayerItemVideoOutput?
-    @ObservationIgnored private var itemObservation: NSKeyValueObservation?
-    @ObservationIgnored private var jumpObserver: NSObjectProtocol?
-    @ObservationIgnored private var options = VideoEnhancementOptions()
-    @ObservationIgnored private var displaySize = CGSize.zero
+    @PerceptionIgnored let layer = AVSampleBufferDisplayLayer()
+    @PerceptionIgnored private weak var player: AVPlayer?
+    @PerceptionIgnored private var engine: (any EnhancementEngine)?
+    @PerceptionIgnored private var item: AVPlayerItem?
+    @PerceptionIgnored private var output: AVPlayerItemVideoOutput?
+    @PerceptionIgnored private var itemObservation: NSKeyValueObservation?
+    @PerceptionIgnored private var jumpObserver: NSObjectProtocol?
+    @PerceptionIgnored private var options = VideoEnhancementOptions()
+    @PerceptionIgnored private var displaySize = CGSize.zero
     /// The frames' format, for asking the TV for a display mode.
-    @ObservationIgnored private var format: CMFormatDescription?
-    @ObservationIgnored private var announced: String?
-    @ObservationIgnored private var displayState = ""
+    @PerceptionIgnored private var format: CMFormatDescription?
+    @PerceptionIgnored private var announced: String?
+    @PerceptionIgnored private var displayState = ""
     /// Called when what the screen should do changes: smoothing, its rate, or the first known format.
-    @ObservationIgnored var onDisplayChange: (() -> Void)?
+    @PerceptionIgnored var onDisplayChange: (() -> Void)?
 
     /// Smoothed frames need the screen at `rate`; nil when the screen should follow the video as usual.
     var displayRequest: (rate: Double, format: CMFormatDescription)? {
@@ -283,14 +283,14 @@ struct EnhancedVideoSurface: View {
     /// Whether AVKit's picture runs under the safe areas, as it does on a screen of its own. At the top of an iPhone
     /// watch page it keeps to its frame, so the enhanced picture must too.
     var bleeds = true
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         if VideoEnhancement.canUpscale || VideoEnhancement.canSmooth {
             // The same area as AVKit's own picture: inside the safe area (under the Mac's title bar) the fitted
             // picture came out smaller than AVKit's, and under the status bar above a watch page's player it came out
             // taller and higher; either way AVKit's picture showed around its edges.
             Host(enhancer: enhancer, fills: fills).ignoresSafeArea(edges: bleeds ? .all : []).allowsHitTesting(false).accessibilityHidden(true)
         }
-    }
+    } }
 
     #if os(macOS)
     private struct Host: NSViewRepresentable {
@@ -961,11 +961,13 @@ private final class EnhancementPipeline: EnhancementEngine, @unchecked Sendable 
     /// OS 27 reports the interpolator's size limit. OS 26 has no query, and above 1280×720 its sessions
     /// start and then fail every frame (reported by other developers), so stay within that there.
     private static func interpolationFits(width: Int, height: Int) -> Bool {
+        #if compiler(>=6.3)
         if #available(macOS 27, iOS 27, tvOS 27, *) {
             guard let side = VTLowLatencyFrameInterpolationConfiguration.maximumDimension(forSpatialScaleFactor: 1),
                   let pixels = VTLowLatencyFrameInterpolationConfiguration.maximumPixelCount(forSpatialScaleFactor: 1) else { return false }
             return max(width, height) <= side && width * height <= pixels
         }
+        #endif
         return max(width, height) <= 1280 && width * height <= 1280 * 720
     }
 

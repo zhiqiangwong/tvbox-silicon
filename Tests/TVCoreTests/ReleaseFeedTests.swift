@@ -23,6 +23,28 @@ private func release(_ version: String, build: Int? = nil, platforms: [String] =
     #expect(feed.updates(after: "1.2", platform: "macos").isEmpty)
 }
 
+@Test func compatibleBuildResolutionPreservesVersionWithoutDirectUpstreamLinkOnIOS16() {
+    let feed = ReleaseFeed(releases: [release("1.8.2"), release("1.8.3"), release("1.8.4")])
+
+    let ios16 = feed.resolveUpdate(after: "1.8.2", platform: "ios", requiresCompatibleBuild: true)
+    #expect(!ios16.isLatestVersion)
+    #expect(ios16.latest?.version == "1.8.4")
+    #expect(ios16.directDownloadURL == nil)
+    #expect(ios16.compatibilityGuidance?.contains("1.8.4") == true)
+    #expect(ios16.compatibilityGuidance?.contains("iOS 16") == true)
+
+    let ios17 = feed.resolveUpdate(after: "1.8.2", platform: "ios", requiresCompatibleBuild: false)
+    #expect(!ios17.isLatestVersion)
+    #expect(ios17.latest?.version == "1.8.4")
+    #expect(ios17.directDownloadURL?.absoluteString == "https://example.com/ios")
+    #expect(ios17.compatibilityGuidance == nil)
+
+    let upToDate = feed.resolveUpdate(after: "1.8.4", platform: "ios", requiresCompatibleBuild: true)
+    #expect(upToDate.isLatestVersion)
+    #expect(upToDate.latest == nil)
+    #expect(upToDate.compatibilityGuidance == nil)
+}
+
 @Test func intelMacsUseTheirOwnPackageAndSkipReleasesWithoutOne() {
     let feed = ReleaseFeed(releases: [release("1.7.2"), release("1.7.3", platforms: ["macos", ReleaseFeed.intelMacKey])])
     #expect(feed.updates(after: "1.7.1", platform: "macos", intelMac: true).map(\.version) == ["1.7.3"])

@@ -1129,3 +1129,7 @@
 "Top Half" = "Top Half";
 "Top Three Quarters" = "Top Three Quarters";
 "Whole Screen" = "Whole Screen";
+"No Results" = "No Results";
+"No Results for “%@”" = "No Results for “%@”";
+"Check the spelling or try a new search." = "Check the spelling or try a new search.";
+"Yingxia %@ is available upstream. iOS 16 requires a verified iOS 16-compatible build rather than the default iOS 17+ release package." = "Yingxia %@ is available upstream. iOS 16 requires a verified iOS 16-compatible build rather than the default iOS 17+ release package.";

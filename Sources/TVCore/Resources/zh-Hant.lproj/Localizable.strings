@@ -1129,3 +1129,7 @@
 "Top Half" = "半畫面";
 "Top Three Quarters" = "3/4 畫面";
 "Whole Screen" = "全畫面";
+"No Results" = "沒有結果";
+"No Results for “%@”" = "沒有「%@」的結果";
+"Check the spelling or try a new search." = "請檢查拼字或嘗試新的搜尋詞。";
+"Yingxia %@ is available upstream. iOS 16 requires a verified iOS 16-compatible build rather than the default iOS 17+ release package." = "上游已發佈映匣 %@。iOS 16 需安裝經驗證的 iOS 16 相容建置版本，請勿直接安裝預設的 iOS 17+ 發行包。";

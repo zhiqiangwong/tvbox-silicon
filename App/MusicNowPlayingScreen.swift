@@ -16,7 +16,7 @@ struct MusicNowPlayingScreen: View {
     @State private var showsChannels = false
     @Namespace private var cover
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         let music = store.music
         VStack(spacing: 0) {
             if let panel {
@@ -52,12 +52,12 @@ struct MusicNowPlayingScreen: View {
         .background { backdrop.ignoresSafeArea() }
         .environment(\.colorScheme, .dark)
         .presentationDragIndicator(.visible)
-        .presentationBackground { backdrop }
+        .sheetPresentationBackground { backdrop }
         .task(id: music.track?.artwork) {
             guard let url = music.track?.artwork, let color = await PosterPalette.average(url) else { return }
             withAnimation(.easeInOut(duration: 0.6)) { tint = color }
         }
-        .onChange(of: music.track == nil) { _, gone in if gone { dismiss() } }
+        .onChangeCompat(of: music.track == nil) { _, gone in if gone { dismiss() } }
         #if DEBUG
         .onAppear {
             switch UserDefaults.standard.string(forKey: "qaNowPlaying") {
@@ -68,7 +68,7 @@ struct MusicNowPlayingScreen: View {
         }
         #endif
         .sheet(isPresented: $showsChannels) { MusicChannelsView() }
-    }
+    } }
 
     private var backdrop: some View {
         LinearGradient(colors: [tint.blend(with: .black, by: 0.2), tint.blend(with: .black, by: 0.62)], startPoint: .top, endPoint: .bottom)
@@ -137,7 +137,7 @@ struct MusicNowPlayingScreen: View {
                     ProgressView().controlSize(.large).frame(width: 72, height: 72)
                 } else {
                     control(music.isPlaying ? "pause.fill" : "play.fill", size: 44, label: music.isPlaying ? "Pause" : "Play") { music.toggle() }
-                        .contentTransition(.symbolEffect(.replace))
+                        .symbolReplaceTransition()
                 }
             }
             Spacer()
@@ -193,7 +193,7 @@ struct MusicVolumeSlider: View {
     @State private var dragging = false
     @State private var system = SystemSlider()
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         HStack(spacing: 12) {
             Image(systemName: "speaker.fill")
             GeometryReader { proxy in
@@ -230,7 +230,7 @@ struct MusicVolumeSlider: View {
             level = min(1, max(0, level + (direction == .increment ? 0.0625 : -0.0625)))
             system.set(level)
         }
-    }
+    } }
 
     /// The system slider inside the hidden volume view, once it exists.
     @MainActor final class SystemSlider {

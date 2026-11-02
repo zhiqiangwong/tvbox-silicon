@@ -12,7 +12,7 @@ struct DetailAurora: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var colors: [Color] = []
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         ZStack {
             Backdrop()
             if !colors.isEmpty {
@@ -30,6 +30,6 @@ struct DetailAurora: View {
             let found = await PosterPalette.colors(poster, headers: headers)
             withAnimation(.easeInOut(duration: 0.8)) { colors = found }
         }
-    }
+    } }
 }
 #endif

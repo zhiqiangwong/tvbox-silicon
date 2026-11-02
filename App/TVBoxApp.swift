@@ -68,8 +68,8 @@ import TVCore
                 .sheet(item: $douyinHandoff) { DouyinHandoffView(link: $0) }
                 #endif
                 // A launch that ends while active, without passing through here, crashed or was ended.
-                .onChange(of: scenePhase, initial: true) { _, phase in ErrorReports.shared.onScreen(phase == .active) }
-                .onChange(of: scenePhase) { _, phase in
+                .onChangeCompat(of: scenePhase, initial: true) { _, phase in ErrorReports.shared.onScreen(phase == .active) }
+                .onChangeCompat(of: scenePhase) { _, phase in
                     if phase == .background {
                         Task { _ = await Diagnostics.shared.snapshot(); ErrorReports.shared.save() }
                         store.cloudSync?.flushPending()

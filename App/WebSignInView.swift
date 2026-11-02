@@ -31,7 +31,7 @@ struct WebSignInView<Code: View>: View {
         _showsCode = State(initialValue: showingCode)
     }
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         NavigationStack {
             Group {
                 if showsCode { code() } else { page }
@@ -48,7 +48,7 @@ struct WebSignInView<Code: View>: View {
             }
         }
         .task { await watch() }
-    }
+    } }
 
     private var page: some View {
         VStack(spacing: 0) {
@@ -278,7 +278,7 @@ struct SaveCodeButton: View {
     @State private var saved = false
     @State private var error: String?
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         VStack(alignment: .leading, spacing: 8) {
             Button { Task { await save() } } label: {
                 Label(L10n.text(saved ? "Saved to Photos" : "Save Code to Photos"), systemImage: saved ? "checkmark" : "square.and.arrow.down")
@@ -298,7 +298,7 @@ struct SaveCodeButton: View {
                     .font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
         }
-    }
+    } }
 
     private func save() async {
         error = nil

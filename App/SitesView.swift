@@ -12,47 +12,13 @@ struct SitesView: View {
     /// The fold as it was when a search began; restored when the search is cleared.
     @State private var foldBeforeSearch: Set<String>?
     @State private var arranging = false
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         Group {
             if let config = store.subscription {
-                let groups = store.sourceGroups(includeHidden: false).filtered(by: query)
-                let sites = store.orderedSites(config)
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: Layout.cardSpacing) {
-                        if query.isEmpty && sites.count > 1 {
-                            SourceOrderCard(sites: sites) { arranging = true }.tvFocusSection()
-                        }
-                        ForEach(groups) { group in
-                            groupHeader(group)
-                            if !collapsed.contains(group.id) {
-                                LazyVGrid(columns: Layout.cardColumns, spacing: Layout.cardSpacing) {
-                                    ForEach(group.sites) { site in
-                                        RouteLink { SiteView(site: site, origin: config.origin, jarURL: config.spiderURL) } label: { SiteCard(site: site, dimmed: group.kind == .hidden) }.tileButton()
-                                            .contextMenu {
-                                                PinSourceButton(site: site, origin: config.origin)
-                                                HideSourceButton(site: site, origin: config.origin)
-                                                if store.sourceOrder.enabled { MoveSourceButtons(site: site, sites: sites) }
-                                            }
-                                    }
-                                }
-                                // Unfolds from under its header; folding only fades, as the groups below slide up.
-                                .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: -16)), removal: .opacity))
-                            }
-                        }
-                    }.pageContainer()
-                }
-                .sheet(isPresented: $arranging) { SourceOrderEditor(sites: sites, automatic: store.automaticSites(config)) }
-                #if DEBUG
-                // `-qaArrangeSources 1` opens the editor for screenshots.
-                .task {
-                    guard UserDefaults.standard.bool(forKey: "qaArrangeSources") else { return }
-                    store.setCustomSourceOrder(true)
-                    // Let launch settle first: on tvOS a sheet asked for straight away never appeared.
-                    try? await Task.sleep(for: .seconds(2))
-                    arranging = true
-                }
-                #endif
-            } else { ContentUnavailableView(L10n.text("No Sources Yet"), systemImage: "square.grid.2x2", description: Text(L10n.text("Add a TVBox subscription in Settings."))) }
+                sitesScroll(config)
+            } else {
+                AppContentUnavailableView(L10n.text("No Sources Yet"), systemImage: "square.grid.2x2", description: Text(L10n.text("Add a TVBox subscription in Settings.")))
+            }
         }
         .screenBackdrop()
         .catalogSearchable(text: $query, prompt: L10n.text("Find a source")).tabTitle(L10n.text("Sources"))
@@ -62,10 +28,10 @@ struct SitesView: View {
                 prepared = true
             }
         }
-        .onChange(of: store.section) { _, new in
+        .onChangeCompat(of: store.section) { _, new in
             if new != .sites { prepared = false }
         }
-        .onChange(of: query) { old, new in
+        .onChangeCompat(of: query) { old, new in
             if old.isEmpty && !new.isEmpty {
                 foldBeforeSearch = collapsed
                 collapsed = []
@@ -74,6 +40,51 @@ struct SitesView: View {
                 foldBeforeSearch = nil
             }
         }
+    } }
+
+    private func sitesScroll(_ config: Subscription) -> some View {
+        let groups = store.sourceGroups(includeHidden: false).filtered(by: query)
+        let sites = store.orderedSites(config)
+        let customOrderEnabled = store.sourceOrder.enabled
+        return ScrollView {
+            LazyVStack(alignment: .leading, spacing: Layout.cardSpacing) {
+                if query.isEmpty && sites.count > 1 {
+                    SourceOrderCard(sites: sites) { arranging = true }.tvFocusSection()
+                }
+                ForEach(groups) { group in
+                    groupHeader(group)
+                    if !collapsed.contains(group.id) {
+                        LazyVGrid(columns: Layout.cardColumns, spacing: Layout.cardSpacing) {
+                            ForEach(group.sites) { site in
+                                RouteLink { SiteView(site: site, origin: config.origin, jarURL: config.spiderURL) } label: { SiteCard(site: site, dimmed: group.kind == .hidden) }.tileButton()
+                                    .contextMenu {
+                                        PinSourceButton(site: site, origin: config.origin)
+                                        HideSourceButton(site: site, origin: config.origin)
+                                        if customOrderEnabled { MoveSourceButtons(site: site, sites: sites) }
+                                    }
+                            }
+                        }
+                        // Unfolds from under its header; folding only fades, as the groups below slide up.
+                        .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: -16)), removal: .opacity))
+                    }
+                }
+            }.pageContainer()
+        }
+        .sheet(isPresented: $arranging) {
+            AppPerceptionTracking {
+                SourceOrderEditor(sites: sites, automatic: store.automaticSites(config))
+            }
+        }
+        #if DEBUG
+        // `-qaArrangeSources 1` opens the editor for screenshots.
+        .task {
+            guard UserDefaults.standard.bool(forKey: "qaArrangeSources") else { return }
+            store.setCustomSourceOrder(true)
+            // Let launch settle first: on tvOS a sheet asked for straight away never appeared.
+            try? await Task.sleep(for: .seconds(2))
+            arranging = true
+        }
+        #endif
     }
 
     @ViewBuilder
@@ -170,11 +181,11 @@ struct SourceHealthDot: View {
     #else
     private let size: CGFloat = 8
     #endif
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         if let tint = status.tint {
             Image(systemName: "circle.fill").font(.system(size: size)).foregroundStyle(tint).accessibilityLabel(status.summary)
         }
-    }
+    } }
 }
 
 /// A source as an app-icon tile plus its name: the name's emoji becomes the icon, its taglines
@@ -196,7 +207,7 @@ struct SiteCard: View {
     // Keyboard focus on the Mac must not turn the text black on a dark panel.
     private let focused = false
     #endif
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         let label = SourceLabel(site.name)
         let pinned = marksPinned && (store.subscription.map { store.pinnedSources.contains(site, origin: $0.origin) } ?? false)
         let runs = site.isBuiltIn || site.canBrowse(jarURL: store.subscription?.spiderURL)
@@ -235,7 +246,7 @@ struct SiteCard: View {
         .background { TileSurface(focused: focused, radius: radius) }
         .accessibilityElement(children: .combine)
         .opacity(dimmed ? 0.45 : 1)
-    }
+    } }
 
     /// Which engine runs a source is an implementation detail; only built-in sources say so.
     private var engine: String? { site.isBuiltIn ? L10n.text("Built-in") : nil }
@@ -245,7 +256,7 @@ struct SiteCard: View {
 struct TileSurface: View {
     var focused: Bool
     var radius: CGFloat
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         #if os(tvOS)
         // Like the system's focused buttons: a quiet tile at rest, a bright plate under focus.
@@ -254,7 +265,7 @@ struct TileSurface: View {
         #else
         Color.clear.contentPanel(cornerRadius: radius)
         #endif
-    }
+    } }
 }
 
 /// A source's icon: Bilibili's own mark, otherwise a `MonogramIcon`.
@@ -262,11 +273,11 @@ struct SourceIcon: View {
     let site: Site
     let label: SourceLabel
     var size: CGFloat
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         if site.isBilibili { BilibiliMark(size: size) } else {
             MonogramIcon(seed: site.name, label: label, size: size, systemImage: site.key == Hongguo.siteKey ? "play.rectangle.fill" : nil)
         }
-    }
+    } }
 }
 
 /// The emoji a name starts with (or its first character, or a symbol) on a tile whose colour is
@@ -281,7 +292,7 @@ struct MonogramIcon: View {
         Color(red: 0.30, green: 0.66, blue: 0.60), Color(red: 0.42, green: 0.56, blue: 0.92),
         Color(red: 0.62, green: 0.48, blue: 0.88), Color(red: 0.52, green: 0.72, blue: 0.38),
     ]
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         // A stable hash: `hashValue` changes every launch.
         let tint = Self.tints[seed.unicodeScalars.reduce(0) { ($0 &* 31 &+ Int($1.value)) & 0xFFFF } % Self.tints.count]
         let shape = RoundedRectangle(cornerRadius: size * 0.26, style: .continuous)
@@ -300,31 +311,31 @@ struct MonogramIcon: View {
         .background(LinearGradient(colors: [tint.opacity(0.85), tint.opacity(0.45)], startPoint: .topLeading, endPoint: .bottomTrailing), in: shape)
         .overlay { shape.strokeBorder(.white.opacity(0.12), lineWidth: 1) }
         .accessibilityHidden(true)
-    }
+    } }
 }
 
 struct PinSourceButton: View {
     @Environment(Store.self) private var store
     let site: Site
     let origin: URL
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         let pinned = store.pinnedSources.contains(site, origin: origin)
         Button { store.pinnedSources.toggle(site, origin: origin) } label: {
             Label(L10n.text(pinned ? "Unpin source" : "Pin source"), systemImage: pinned ? "pin.slash" : "pin")
         }.accessibilityIdentifier("source.pin." + site.key)
-    }
+    } }
 }
 
 struct HideSourceButton: View {
     @Environment(Store.self) private var store
     let site: Site
     let origin: URL
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         let hidden = store.hiddenSources.contains(site, origin: origin)
         Button { store.hiddenSources.toggle(site, origin: origin) } label: {
             Label(L10n.text(hidden ? "Unhide Source" : "Hide Source"), systemImage: hidden ? "eye" : "eye.slash")
         }.accessibilityIdentifier("source.hide." + site.key)
-    }
+    } }
 }
 
 /// Context-menu moves within the viewer's own source order.
@@ -332,7 +343,7 @@ struct MoveSourceButtons: View {
     @Environment(Store.self) private var store
     let site: Site
     let sites: [Site]
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         if let index = sites.firstIndex(where: { $0.id == site.id }) {
             if index > 0 {
                 Button { store.moveSource(site, to: 0) } label: { Label(L10n.text("Move to Top"), systemImage: "arrow.up.to.line") }
@@ -341,7 +352,7 @@ struct MoveSourceButtons: View {
                 Button { store.moveSource(site, to: sites.count) } label: { Label(L10n.text("Move to Bottom"), systemImage: "arrow.down.to.line") }
             }
         }
-    }
+    } }
 }
 
 /// The Sources page's header: the switch for the viewer's own order (`SourceOrder`), the top of
@@ -357,7 +368,7 @@ struct SourceOrderCard: View {
         L10n.text(store.sourceOrder.enabled ? "Sources at the top are searched first, and their results are listed first."
                                             : "Yingxia searches quick, reliable sources first.")
     }
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         #if os(tvOS)
         VStack(alignment: .leading, spacing: 8) {
             TVSettingsToggle(title: L10n.text("Custom Search Order"), detail: detail, isOn: enabled)
@@ -407,7 +418,7 @@ struct SourceOrderCard: View {
         .padding(16)
         .contentPanel(cornerRadius: 22)
         #endif
-    }
+    } }
 }
 
 /// The first sources of an order, as numbered icons.
@@ -419,7 +430,7 @@ struct SourceOrderPreview: View {
     #else
     private let size: CGFloat = 30
     #endif
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         let shown = Array(sites.prefix(limit))
         HStack(spacing: size * 0.32) {
             ForEach(Array(shown.enumerated()), id: \.element.id) { index, site in
@@ -435,20 +446,20 @@ struct SourceOrderPreview: View {
         // Room for the badges that stick out.
         .padding(.top, size * 0.18).padding(.leading, size * 0.18)
         .accessibilityHidden(true)
-    }
+    } }
 }
 
 struct SourceRankBadge: View {
     let rank: Int
     var size: CGFloat
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         Text(rank, format: .number).font(.system(size: size * 0.62, weight: .bold, design: .rounded)).monospacedDigit()
             .foregroundStyle(Brand.onAccent)
             .padding(.horizontal, size * 0.2)
             .frame(minWidth: size, minHeight: size)
             .background(Brand.accent, in: Capsule())
             .overlay { Capsule().strokeBorder(.black.opacity(0.25), lineWidth: 1) }
-    }
+    } }
 }
 
 /// One source in the order editor: its place, icon, name and health.
@@ -463,7 +474,7 @@ private struct SourceOrderRow: View {
     private let icon: CGFloat = 32, rankWidth: CGFloat = 26
     private let title = Font.body.weight(.medium), caption = Font.caption
     #endif
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         let label = SourceLabel(site.name)
         let detail = (label.parts.dropFirst() + [site.isBuiltIn ? L10n.text("Built-in") : nil].compactMap { $0 }).joined(separator: " · ")
         HStack(spacing: 12) {
@@ -486,7 +497,7 @@ private struct SourceOrderRow: View {
         }
         .padding(.vertical, 3)
         .accessibilityElement(children: .combine)
-    }
+    } }
 }
 
 /// The viewer's source order as a list to drag into place. tvOS has no dragging: there, choose a
@@ -512,7 +523,7 @@ struct SourceOrderEditor: View {
         if let config = store.subscription { store.sourceOrder.save(sites, origin: config.origin) }
     }
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         #if os(tvOS)
         NavigationStack {
             ScrollView {
@@ -597,7 +608,7 @@ struct SourceOrderEditor: View {
         .frame(width: 480, height: 600)
         #endif
         #endif
-    }
+    } }
 
     #if os(tvOS)
     private func move(_ site: Site, to offset: Int) {
@@ -635,10 +646,10 @@ struct SiteView: View {
         }
     }
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         Group {
             if !canLoad {
-                ContentUnavailableView {
+                AppContentUnavailableView {
                     Label(site.compatibility, systemImage: "puzzlepiece.extension")
                 } description: {
                     if site.type != 3 {
@@ -655,6 +666,11 @@ struct SiteView: View {
                 .onExitCommand { dismiss() }
                 #endif
             } else {
+                let hasCategories = !browser.categories.isEmpty
+                let videos = browser.videos
+                let busy = browser.busy
+                let error = browser.error
+                let loaded = browser.loaded
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 20) {
                         #if os(tvOS)
@@ -667,28 +683,28 @@ struct SiteView: View {
                         }
                         #endif
                         if site.isBilibili && !BilibiliAccount.load().signedIn { BilibiliSignInBanner() }
-                        if !browser.categories.isEmpty { categoryBar } else if initialLoading && folder == nil { ChipSkeletonRow() }
-                        if isIndex && !browser.videos.isEmpty {
+                        if hasCategories { categoryBar } else if initialLoading && folder == nil { ChipSkeletonRow() }
+                        if isIndex && !videos.isEmpty {
                             Text(L10n.text("Choose a title to find it across your sources.")).font(.subheadline).foregroundStyle(.secondary)
                         }
-                        if browser.busy {
+                        if busy {
                             LoadingCard { .source(site, origin: origin, title: L10n.text("Loading source content…")) }
                         }
                         if initialLoading { PosterSkeletonGrid().loadingFocus { dismiss() } }
-                        if let error = browser.error {
+                        if let error {
                             ErrorStateCard(
                                 title: L10n.text("Unable to load this source"),
                                 message: L10n.text("Try again, or choose another source to keep watching."),
                                 details: error,
                                 retry: { startRequest { await browser.load(browser.request, client: client) } },
                                 goBack: { dismiss() },
-                                busy: browser.busy
+                                busy: busy
                             )
-                            .padding(.vertical, browser.videos.isEmpty ? 24 : 8)
+                            .padding(.vertical, videos.isEmpty ? 24 : 8)
                         }
-                        if browser.videos.isEmpty && browser.loaded && !browser.busy && browser.error == nil { ContentUnavailableView(L10n.text("No Videos"), systemImage: "film", description: Text(L10n.text("Try selecting a category or searching."))).frame(maxWidth: .infinity) }
+                        if videos.isEmpty && loaded && !busy && error == nil { AppContentUnavailableView(L10n.text("No Videos"), systemImage: "film", description: Text(L10n.text("Try selecting a category or searching."))).frame(maxWidth: .infinity) }
                         LazyVGrid(columns: Layout.posterColumns, spacing: Layout.gridRowSpacing) {
-                            ForEach(browser.videos) { video in
+                            ForEach(videos) { video in
                                 // An index source (a ranking or list site) names titles; other sources play them.
                                 if isIndex {
                                     Button { store.searchVideos(video.name) } label: { PosterCard(video: video) }.cardButton()
@@ -697,10 +713,14 @@ struct SiteView: View {
                                 }
                             }
                         }
-                        .opacity(browser.busy && !browser.videos.isEmpty ? 0.55 : 1).animation(.smooth, value: browser.busy)
+                        .opacity(busy && !videos.isEmpty ? 0.55 : 1).animation(.smooth, value: busy)
                     }.pageContainer()
                 }
-                .safeAreaInset(edge: .bottom) { if browser.pageCount > 1 { pager } }
+                .safeAreaInset(edge: .bottom) {
+                    AppPerceptionTracking {
+                        if browser.pageCount > 1 { pager }
+                    }
+                }
                 .catalogSearchable(text: Binding(get: { query }, set: { value in
                     query = value
                     if value.isEmpty && !browser.query.isEmpty { startRequest { await home() } }
@@ -738,14 +758,16 @@ struct SiteView: View {
                 else { query = initialQuery; await search(); await browser.loadCategories(client: client) }
             }
         }
-    }
+    } }
     private var categoryBar: some View {
-        ChipRow {
+        let isDefaultQuery = browser.query.isEmpty
+        let currentCategory = browser.category
+        return ChipRow {
             GlassGroup(spacing: 8) {
                 HStack(spacing: 8) {
-                    Chip(title: L10n.text("Recommendations"), selected: browser.query.isEmpty && browser.category.isEmpty) { query = ""; startRequest { await home() } }
+                    Chip(title: L10n.text("Recommendations"), selected: isDefaultQuery && currentCategory.isEmpty) { query = ""; startRequest { await home() } }
                     ForEach(browser.categories) { item in
-                        Chip(title: item.name, selected: browser.query.isEmpty && browser.category == item.id) {
+                        Chip(title: item.name, selected: isDefaultQuery && currentCategory == item.id) {
                             query = ""
                             startRequest { await browser.load(.list(category: item.id, query: "", page: 1), client: client) }
                         }
@@ -786,10 +808,10 @@ struct SiteView: View {
 struct CatalogDestination: View {
     let video: Video
     let client: CatalogClient
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         if video.isFolder { SiteView(site: client.site, origin: client.origin, jarURL: client.jarURL, folder: video) }
         else { VideoDetailView(video: video, client: client) }
-    }
+    } }
 }
 
 struct VideoDetailView: View {
@@ -866,7 +888,7 @@ struct VideoDetailView: View {
         }
     }
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         Group {
             #if os(iOS)
             if watchLayout { watchBody } else { pageBody }
@@ -904,7 +926,7 @@ struct VideoDetailView: View {
         }
         .onDisappear { requestTask?.cancel() }
         .task(id: detail?.id) { await startTMDB() }
-        .onChange(of: choosingQuality) { _, open in if !open && !busy { loadingEpisode = nil } }
+        .onChangeCompat(of: choosingQuality) { _, open in if !open && !busy { loadingEpisode = nil } }
         // Sign in where playback failed, then resume the episode that needed the account.
         #if os(macOS)
         .sheet(item: $signingIn) { drive in
@@ -948,7 +970,7 @@ struct VideoDetailView: View {
                 }
             }
         }
-    }
+    } }
 
     /// One page on Mac, iPad and Apple TV: the banner, the synopsis, the episodes, then TMDB's cast and facts. An episode
     /// rail beside the banner (once used for long lists, and always on Apple TV) squeezed the banner into a card.
@@ -1418,43 +1440,48 @@ struct VideoDetailView: View {
         let columns = showsStills ? [GridItem(.adaptive(minimum: TMDBMetrics.episodeTile), spacing: TMDBMetrics.spacing, alignment: .top)]
             : longNames ? rowColumns : [GridItem(.adaptive(minimum: episodeMin), spacing: 8)]
         return LazyVGrid(columns: columns, spacing: showsStills ? TMDBMetrics.spacing : longNames ? 4 : 8) {
-            ForEach(shownOrder(items)) { episode in
-                let saved = download(episode)
-                Group {
-                    if showsStills {
-                        Button { startRequest { await play(episode) } } label: {
-                            TMDBEpisodeTile(name: EpisodeRow.title(episode.name), info: stills[episode.id], loading: loadingEpisode == episode.id, width: nil)
+            AppPerceptionTracking {
+                ForEach(shownOrder(items)) { episode in
+                    AppPerceptionTracking {
+                        let saved = download(episode)
+                        let isFav = store.favorites.contains(episodeFavorite(episode))
+                        Group {
+                            if showsStills {
+                                Button { startRequest { await play(episode) } } label: {
+                                    TMDBEpisodeTile(name: EpisodeRow.title(episode.name), info: stills[episode.id], loading: loadingEpisode == episode.id, width: nil)
+                                }
+                                .tmdbCardButton()
+                                .overlay(alignment: .topTrailing) { if saved?.status == .completed { DownloadedBadge().padding(4) } }
+                                .accessibilityLabel(episode.name)
+                            } else if longNames {
+                                EpisodeRow(name: episode.name, loading: loadingEpisode == episode.id, download: saved) { startRequest { await play(episode) } }
+                            } else {
+                                Chip(title: episode.name, selected: loadingEpisode == episode.id, fill: true) { startRequest { await play(episode) } }
+                                    .overlay(alignment: .topTrailing) { if saved?.status == .completed { DownloadedBadge() } }
+                            }
                         }
-                        .tmdbCardButton()
-                        .overlay(alignment: .topTrailing) { if saved?.status == .completed { DownloadedBadge().padding(4) } }
-                        .accessibilityLabel(episode.name)
-                    } else if longNames {
-                        EpisodeRow(name: episode.name, loading: loadingEpisode == episode.id, download: saved) { startRequest { await play(episode) } }
-                    } else {
-                        Chip(title: episode.name, selected: loadingEpisode == episode.id, fill: true) { startRequest { await play(episode) } }
-                            .overlay(alignment: .topTrailing) { if saved?.status == .completed { DownloadedBadge() } }
-                    }
-                }
-                .overlay(alignment: .topLeading) {
-                    if store.favorites.contains(episodeFavorite(episode)) {
-                        Image(systemName: "heart.fill")
-                            .font(.system(size: DownloadMetrics.thumb > 60 ? 18 : 12, weight: .semibold))
-                            .foregroundStyle(Brand.rose)
-                            .padding(4)
-                            .allowsHitTesting(false)
-                            .accessibilityHidden(true)
-                    }
-                }
-                .contextMenu {
-                    FavoriteMenuButton(item: episodeFavorite(episode), name: episode.name)
-                    if saved == nil || saved?.status == .failed {
-                        Button(L10n.text("Download"), systemImage: "arrow.down.circle") {
-                            DownloadLibrary.shared.download(DownloadSource(site: client.site, videoID: video.id, episode: episode),
-                                                            title: video.name, poster: video.poster, posterHeaders: video.posterHeaders)
+                        .overlay(alignment: .topLeading) {
+                            if isFav {
+                                Image(systemName: "heart.fill")
+                                    .font(.system(size: DownloadMetrics.thumb > 60 ? 18 : 12, weight: .semibold))
+                                    .foregroundStyle(Brand.rose)
+                                    .padding(4)
+                                    .allowsHitTesting(false)
+                                    .accessibilityHidden(true)
+                            }
                         }
-                    } else if let saved {
-                        Button(L10n.text(saved.status == .completed ? "Delete Download" : "Cancel Download"), systemImage: "trash", role: .destructive) {
-                            DownloadLibrary.shared.remove([saved.id])
+                        .contextMenu {
+                            FavoriteMenuButton(item: episodeFavorite(episode), name: episode.name)
+                            if saved == nil || saved?.status == .failed {
+                                Button(L10n.text("Download"), systemImage: "arrow.down.circle") {
+                                    DownloadLibrary.shared.download(DownloadSource(site: client.site, videoID: video.id, episode: episode),
+                                                                    title: video.name, poster: video.poster, posterHeaders: video.posterHeaders)
+                                }
+                            } else if let saved {
+                                Button(L10n.text(saved.status == .completed ? "Delete Download" : "Cancel Download"), systemImage: "trash", role: .destructive) {
+                                    DownloadLibrary.shared.remove([saved.id])
+                                }
+                            }
                         }
                     }
                 }
@@ -1602,7 +1629,7 @@ struct VideoDetailView: View {
             store.watchPageScopes.formUnion(watchScopes)
             PlayerOrientation.holdPortrait(true)
         }
-        .onChange(of: watchScopes) { old, new in
+        .onChangeCompat(of: watchScopes) { old, new in
             store.watchPageScopes.subtract(old.subtracting(new)); store.watchPageScopes.formUnion(new)
         }
         .onDisappear {
@@ -1612,12 +1639,12 @@ struct VideoDetailView: View {
             if fullScreen { fullScreen = false; PlayerOrientation.set(landscape: false) }
             PlayerOrientation.holdPortrait(false)
         }
-        .onChange(of: watchChannel == nil) { _, ended in
+        .onChangeCompat(of: watchChannel == nil) { _, ended in
             playerStarted = false
             if ended { playerSession = nil }
             if ended && fullScreen { setFullScreen(landscape: false) }
         }
-        .sheet(isPresented: $showsAllEpisodes) { allEpisodes }
+        .sheet(isPresented: $showsAllEpisodes) { AppPerceptionTracking { allEpisodes } }
     }
 
     @ViewBuilder private var watchPlayer: some View {
@@ -1758,15 +1785,23 @@ struct VideoDetailView: View {
                         // scrollPosition rather than ScrollViewReader: scrollTo also scrolls the page's vertical
                         // scroll view, which pushed the title under the player.
                         ScrollView(.horizontal) {
-                            LazyHStack(alignment: .top, spacing: stills.isEmpty ? 8 : 12) { ForEach(shownOrder(items)) { watchEpisodeCard($0, compact: compact, info: stills[$0.id]) } }
-                                .scrollTargetLayout()
+                            LazyHStack(alignment: .top, spacing: stills.isEmpty ? 8 : 12) {
+                                AppPerceptionTracking {
+                                    ForEach(shownOrder(items)) { episode in
+                                        AppPerceptionTracking {
+                                            watchEpisodeCard(episode, compact: compact, info: stills[episode.id])
+                                        }
+                                    }
+                                }
+                            }
+                                .scrollTargetLayoutCompat()
                                 .padding(.horizontal, 16)
                         }
                         .scrollIndicators(.never)
-                        .scrollPosition(id: $episodeScroll, anchor: .center)
+                        .scrollPositionCompat(id: $episodeScroll, anchor: .center)
                         .padding(.horizontal, -16)
                         .onAppear { episodeScroll = currentEpisodeID }
-                        .onChange(of: currentEpisodeID) { _, id in if let id { withAnimation { episodeScroll = id } } }
+                        .onChangeCompat(of: currentEpisodeID) { _, id in if let id { withAnimation { episodeScroll = id } } }
                     }
                 }
             }
@@ -1853,7 +1888,13 @@ struct VideoDetailView: View {
                     watchLines
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: stills.isEmpty ? (compact ? 64 : 150) : 160), spacing: stills.isEmpty ? 8 : 12, alignment: .top)],
                               spacing: stills.isEmpty ? 8 : 14) {
-                        ForEach(shownOrder(items)) { watchEpisodeCard($0, compact: compact, fill: true, info: stills[$0.id]) { showsAllEpisodes = false } }
+                        AppPerceptionTracking {
+                            ForEach(shownOrder(items)) { episode in
+                                AppPerceptionTracking {
+                                    watchEpisodeCard(episode, compact: compact, fill: true, info: stills[episode.id]) { showsAllEpisodes = false }
+                                }
+                            }
+                        }
                     }
                 }
                 .padding(16)
@@ -2028,7 +2069,7 @@ private struct EpisodeRow: View {
         #endif
     }
     private var parts: (title: String, detail: String?) { Self.split(name) }
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         let parts = parts
         let button = Button(action: action) {
             HStack(spacing: 10) {
@@ -2061,7 +2102,7 @@ private struct EpisodeRow: View {
             .onHover { hovering = $0 }
             .animation(.smooth(duration: 0.15), value: hovering)
         #endif
-    }
+    } }
 }
 
 private struct DownloadLabelStyle: LabelStyle {

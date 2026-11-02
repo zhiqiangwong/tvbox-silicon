@@ -6,8 +6,8 @@ We recommend **[cider](https://github.com/Battzz/cider-cli)**, a free command-li
 
 ## What you need
 
-- **iPhone or iPad** with iOS / iPadOS 17 or later, or **Apple TV** with tvOS 17 or later.
-- An **Apple account**. A free account works.
+- **iPhone or iPad** with iOS / iPadOS 17 or later for the official upstream IPA, or **iOS / iPadOS 16.0 or later** when using the iOS 16 compatibility build (pending final on-device acceptance; see [iOS / iPadOS 16 compatibility build](#ios--ipados-16-compatibility-build) below). **Apple TV** requires tvOS 17 or later.
+- An **Apple account**. A free account works (or TrollStore on supported iOS / iPadOS 16 devices).
 - A **Mac, Windows or Linux computer** for iPhone and iPad. For **Apple TV you need a Mac** on the same local network as the TV: installing to Apple TV over Wi-Fi isn't possible from Windows or Linux.
 - The **Yingxia IPA** for your device:
 
@@ -134,10 +134,26 @@ Turn on **automatic app refreshing** in Sideloadly; it renews the signature only
 
 Yingxia has an AltStore source at `https://yingxia.getmegaportal.com/altstore.json`, which AltStore Classic and SideStore can also read. In AltStore or SideStore, open **Sources**, tap **+**, paste that address and tap **Add**, then install Yingxia from the source. New versions then show up under **Updates**. The source lists the iPhone and iPad app only: AltStore doesn't install on Apple TV.
 
+### iOS / iPadOS 16 compatibility build
+
+Upstream release IPAs published at `download.getmegaportal.com` are built for iOS / iPadOS 17+. For iPhone and iPad running **iOS / iPadOS 16.0–16.x**, use a compatible Release IPA built from the `codex/support-ios16` compatibility branch (currently in candidate acceptance testing; do not install an unverified upstream iOS 17+ IPA on iOS 16, as it will fail with `DeviceOSVersionTooLow`).
+
+- **Build a local sideload Release IPA (without upstream credentials or `APPSTORE`):**
+  ```sh
+  Scripts/verify.sh --ios-min-target
+  # Ad-hoc sign and package build/XcodeBuild/Release-iphoneos/TVBox-iOS.app into an IPA:
+  mkdir -p build/sideload/Payload-Release/Payload
+  cp -R build/XcodeBuild/Release-iphoneos/TVBox-iOS.app build/sideload/Payload-Release/Payload/TVBox-iOS.app
+  (cd build/sideload/Payload-Release && ditto -c -k --sequesterRsrc --keepParent Payload ../Yingxia-iOS16-Release.ipa)
+  rm -rf build/sideload/Payload-Release
+  ```
+- **Install or update on iOS / iPadOS 16:** Install `Yingxia-iOS16-Release.ipa` directly with **TrollStore**, or sign and install it with **cider** / **Sideloadly** using your Apple account. When updating an existing installation, install the new compatible IPA over the existing app with the same bundle identifier (`com.jo32.yingxia.ios`) without uninstalling first, so your subscriptions, favorites, playback history, and downloads stay intact.
+
 ## Troubleshooting
 
 | Problem | Try this |
 | --- | --- |
+| `DeviceOSVersionTooLow` | Official upstream IPAs require iOS / iPadOS 17+ or tvOS 17+. On iPhone or iPad with iOS / iPadOS 16.0+, use the iOS 16 compatible Release IPA instead of the upstream download; on Apple TV, update to tvOS 17 or later. |
 | The device isn't in `cider device list` | iPhone/iPad: use a data cable, unlock it, reconnect and confirm **Trust**. Windows: iTunes or Apple Devices must be installed. Apple TV: same network as the Mac, then pair it once in Xcode (see above). |
 | `cider device trust` fails with `PasswordProtected` or `PairingDialogResponsePending` | Unlock the device, tap **Trust**, enter the passcode, and run it again. |
 | `UserDeniedPairing` or `InvalidHostID` | On the device, go to Settings → General → Transfer or Reset → Reset → **Reset Location & Privacy**, reconnect and run `cider device trust` again. |

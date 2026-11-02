@@ -7,13 +7,13 @@ struct MusicArtwork: View {
     let url: URL?
     var size: CGFloat?
     var symbol = "music.note"
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         Color.clear
             .aspectRatio(1, contentMode: .fit)
             .overlay { PosterImage(url: url, symbol: symbol) }
             .frame(width: size, height: size)
             .clipShape(RoundedRectangle(cornerRadius: size.map { max(4, $0 * 0.12) } ?? 12, style: .continuous))
-    }
+    } }
 }
 
 #if os(iOS)
@@ -24,7 +24,7 @@ struct MusicMiniPlayer: View {
     @Environment(Store.self) private var store
     var inline = false
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         let music = store.music
         HStack(spacing: inline ? 10 : 12) {
             MusicArtwork(url: music.track?.artwork, size: inline ? 28 : 34)
@@ -44,7 +44,7 @@ struct MusicMiniPlayer: View {
                     ProgressView().frame(width: 36, height: 36)
                 } else {
                     button(music.isPlaying ? "pause.fill" : "play.fill", label: music.isPlaying ? "Pause" : "Play") { music.toggle() }
-                        .contentTransition(.symbolEffect(.replace))
+                        .symbolReplaceTransition()
                 }
                 if !inline {
                     button("forward.fill", label: "Next") { music.next() }.disabled(music.queue?.hasNext != true)
@@ -62,7 +62,7 @@ struct MusicMiniPlayer: View {
         // `-qaNowPlaying artwork|lyrics|queue` opens Now Playing on that panel, for screenshots.
         .task { if UserDefaults.standard.string(forKey: "qaNowPlaying") != nil { music.presentsPlayer = true } }
         #endif
-    }
+    } }
 
     private func button(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
@@ -97,6 +97,6 @@ enum MusicAccessory {
 @available(iOS 26.1, *)
 private struct MusicAccessoryContent: View {
     @Environment(\.tabViewBottomAccessoryPlacement) private var placement
-    var body: some View { MusicMiniPlayer(inline: placement == .inline) }
+    var body: some View { AppPerceptionTracking { MusicMiniPlayer(inline: placement == .inline) } }
 }
 #endif

@@ -14,7 +14,7 @@ struct PlaybackHistoryView: View {
         history.entries.filter { query.isEmpty || $0.context.videoName.localizedCaseInsensitiveContains(query) || $0.context.sourceName.localizedCaseInsensitiveContains(query) }
     }
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         Group {
             if history.entries.isEmpty {
                 EmptyPage(symbol: AppSection.history.icon, title: L10n.text("No Playback History Yet"),
@@ -27,7 +27,7 @@ struct PlaybackHistoryView: View {
         .screenBackdrop()
         .historyDetailsDestination()
         .tabTitle(L10n.text("Playback History"))
-        .onChange(of: history.entries.isEmpty) { _, empty in if empty { managing = false; selected.removeAll() } }
+        .onChangeCompat(of: history.entries.isEmpty) { _, empty in if empty { managing = false; selected.removeAll() } }
         // Leaving the page gives up a title still being prepared.
         .onDisappear { if store.playing == nil { store.cancelResume() } }
         .confirmationDialog(L10n.text("Remove selected history and its cached content?"), isPresented: $confirmsDelete, titleVisibility: .visible) {
@@ -38,7 +38,7 @@ struct PlaybackHistoryView: View {
         } message: {
             Text(L10n.text("Removing a title also clears its cached content and skip times."))
         }
-    }
+    } }
 
     private var content: some View {
         ScrollView {
@@ -150,7 +150,7 @@ struct HistoryCard: View {
         true
         #endif
     }
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         // The heart is a sibling of the poster button, so a click does not resume or change the selection.
         ZStack(alignment: .topLeading) {
             posterButton
@@ -178,7 +178,7 @@ struct HistoryCard: View {
         .onHover { hovering = $0 }
         .animation(.smooth(duration: 0.15), value: hovering)
         #endif
-    }
+    } }
 
     /// Remove control, rose under the pointer. A pointer shows it; the context menu stays for touch and the remote.
     private var historyRemove: some View {
@@ -257,16 +257,18 @@ struct HistoryCard: View {
                         Image(systemName: selection ? "checkmark.circle.fill" : "circle")
                             .font(.title2).symbolRenderingMode(.palette)
                             .foregroundStyle(selection ? Brand.onAccent : .white, selection ? Brand.accent : .black.opacity(0.35))
-                            .contentTransition(.symbolEffect(.replace))
+                            .symbolReplaceTransition()
                             .padding(8)
                     }
                 }
                 .overlay {
-                    // Preparing this title; choosing another card switches to that one.
-                    if store.resumingHistoryID == entry.id {
-                        ZStack {
-                            Color.black.opacity(0.5)
-                            ProgressView().controlSize(.large).tint(.white)
+                    AppPerceptionTracking {
+                        // Preparing this title; choosing another card switches to that one.
+                        if store.resumingHistoryID == entry.id {
+                            ZStack {
+                                Color.black.opacity(0.5)
+                                ProgressView().controlSize(.large).tint(.white)
+                            }
                         }
                     }
                 }
@@ -306,15 +308,15 @@ extension View {
 private struct HistoryDetailsDestination: ViewModifier {
     @Environment(\.openRoute) private var openRoute
     @State private var route: Route?
-    func body(content: Content) -> some View {
+    func body(content: Content) -> some View { AppPerceptionTracking {
         content
             .environment(\.openHistoryDetails) { if let openRoute { openRoute($0) } else { route = $0 } }
-            .navigationDestination(item: $route) { route in
+            .navigationDestinationCompat(item: $route) { route in
                 #if os(macOS)
                 route.build().musicBar()
                 #else
                 route.build()
                 #endif
             }
-    }
+    } }
 }

@@ -46,7 +46,7 @@ struct FeedbackView: View {
     private static var qaDrafted = false
     #endif
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         content
             .onAppear {
                 guard !contextLoaded else { return }
@@ -65,7 +65,7 @@ struct FeedbackView: View {
                 if UserDefaults.standard.bool(forKey: "qaFeedbackSend") { send() }
             }
             #endif
-    }
+    } }
 
     @ViewBuilder private var content: some View {
         #if os(tvOS)
@@ -215,7 +215,7 @@ private struct FeedbackPage: View {
         #endif
     }
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         ScrollView {
             VStack(spacing: compact ? 22 : 28) {
                 header
@@ -238,7 +238,7 @@ private struct FeedbackPage: View {
         .background { Backdrop() }
         #endif
         .screenTitle(L10n.text("Send Feedback"), width: Layout.settingsWidth)
-    }
+    } }
 
     private var header: some View {
         let tile = RoundedRectangle(cornerRadius: compact ? 16 : 18, style: .continuous)
@@ -441,7 +441,7 @@ private struct FeedbackHistory: View {
     @Environment(\.openURL) private var openURL
     private static let card = RoundedRectangle(cornerRadius: 14, style: .continuous)
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Label(L10n.text("Your Feedback"), systemImage: "tray.full")
@@ -464,7 +464,7 @@ private struct FeedbackHistory: View {
             }
         }
         .animation(.easeOut(duration: 0.2), value: open)
-    }
+    } }
 
     private func row(_ item: Feedback.Sent) -> some View {
         let status = statuses[item.number]
@@ -547,7 +547,7 @@ private struct FeedbackKindCard: View {
     @State private var hovering = false
     private let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
 
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         Button(action: action) {
             VStack(alignment: .leading, spacing: compact ? 8 : 10) {
                 HStack(alignment: .top) {
@@ -579,7 +579,7 @@ private struct FeedbackKindCard: View {
         .animation(.easeOut(duration: 0.15), value: selected)
         .animation(.easeOut(duration: 0.12), value: hovering)
         .accessibilityAddTraits(selected ? .isSelected : [])
-    }
+    } }
 }
 
 private extension Feedback.Kind {
@@ -619,7 +619,7 @@ private extension Feedback.Kind {
 /// Settings › Telegram Group: Apple TV can't open the invite, so it goes to a phone as a QR code.
 struct TelegramGroupView: View {
     @Environment(\.dismiss) private var dismiss
-    var body: some View {
+    var body: some View { AppPerceptionTracking {
         TVSettingsSubpage(symbol: "paperplane", title: L10n.text("Telegram Group"), subtitle: L10n.text("Chat with the developer and other users")) {
             VStack(spacing: 24) {
                 if let image = QRCode.image(Support.telegram.absoluteString) {
@@ -633,6 +633,6 @@ struct TelegramGroupView: View {
             }
             .frame(maxWidth: .infinity)
         }
-    }
+    } }
 }
 #endif
