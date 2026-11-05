@@ -30,6 +30,21 @@ public enum DanmakuSource {
         }
     }
 
+    /// The Bilibili comment track a play result's `danmaku` feed names
+    /// (`https://api.bilibili.com/x/v2/dm/web/seg.so?type=1&oid=<cid>`), or nil for any other feed.
+    public static func bilibiliCID(_ feed: String) -> String? {
+        guard let components = URLComponents(string: feed), components.host?.hasSuffix("bilibili.com") == true,
+              let oid = components.queryItems?.first(where: { $0.name == "oid" })?.value, let cid = UInt64(oid), cid > 0 else { return nil }
+        return String(cid)
+    }
+
+    /// Registers a play result's comment feed for its media address. Returns whether the feed was usable.
+    @discardableResult public static func register(_ url: URL, feed: String?, duration: Double?) -> Bool {
+        guard let cid = feed.flatMap(bilibiliCID) else { return false }
+        register(url, bilibiliCID: cid, duration: duration)
+        return true
+    }
+
     /// A Bilibili media address cast by the phone (…/upgcxcode/…/<cid>-<n>-<quality>.mp4) names its part's cid,
     /// which is all the comments need. Returns whether the address had one.
     @discardableResult public static func registerBilibiliMedia(_ url: URL) -> Bool {
@@ -160,6 +175,28 @@ public enum DanmakuArea: Int, CaseIterable, Sendable {
     }
     /// The choice after this one, for a row that steps through them with each press.
     public var next: DanmakuArea { Self.allCases[((Self.allCases.firstIndex(of: self) ?? 0) + 1) % Self.allCases.count] }
+}
+
+/// Text size and opacity for every comment track (matched or imported comments, Bilibili videos and live rooms).
+/// The size is stored in points under `fontSizeKey`, where 22 is the standard size.
+public enum DanmakuStyle {
+    public static let fontSizeKey = "danmakuFontSize", opacityKey = "danmakuOpacity"
+    public static let standardFontSize = 22.0, standardOpacity = 0.85
+    /// The sizes the player's menu offers, smallest first. A size the older slider stored between them stays in the list.
+    public static func fontSizes(including current: Double) -> [Double] {
+        choices([16, 18, 20, 22, 26, 30, 36], current).sorted()
+    }
+    /// The opacities the player's menu offers, most opaque first.
+    public static func opacities(including current: Double) -> [Double] {
+        choices([1, 0.85, 0.7, 0.5, 0.3], current).sorted(by: >)
+    }
+    /// How many times the standard size comments are drawn, within the slider's 16–36 range.
+    public static func textScale(_ fontSize: Double) -> Double {
+        fontSize.isFinite ? min(36, max(16, fontSize)) / standardFontSize : 1
+    }
+    private static func choices(_ standard: [Double], _ current: Double) -> [Double] {
+        !current.isFinite || standard.contains(where: { abs($0 - current) < 0.001 }) ? standard : standard + [current]
+    }
 }
 
 /// Places comments in lanes as their time comes, so none overlap: a scrolling comment takes a lane once

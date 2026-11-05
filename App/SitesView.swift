@@ -19,6 +19,7 @@ struct SitesView: View {
     /// The fold as it was when a search began; restored when the search is cleared.
     @State private var foldBeforeSearch: Set<String>?
     @State private var arranging = false
+    @State private var choosingHidden = false
     var body: some View { AppPerceptionTracking {
         Group {
             if let config = store.subscription {
@@ -29,7 +30,10 @@ struct SitesView: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: Layout.cardSpacing) {
                         if pick == nil, query.isEmpty && sites.count > 1 {
-                            SourceOrderCard(sites: sites) { arranging = true }.tvFocusSection()
+                            VStack(alignment: .leading, spacing: Layout.cardSpacing) {
+                                SourceOrderCard(sites: sites) { arranging = true }
+                                HideSourcesCard(hidden: groups.first { $0.kind == .hidden }?.sites.count ?? 0) { choosingHidden = true }
+                            }.tvFocusSection()
                         }
                         ForEach(groups) { group in
                             groupHeader(group)
@@ -62,6 +66,7 @@ struct SitesView: View {
                 .onAppear { if pick != nil, let picked { proxy.scrollTo(picked, anchor: .center) } }
                 }
                 .sheet(isPresented: $arranging) { AppPerceptionTracking { SourceOrderEditor(sites: sites, automatic: store.automaticSites(config)) } }
+                .sheet(isPresented: $choosingHidden) { HiddenSourcesEditor() }
                 #if DEBUG
                 // `-qaArrangeSources 1` opens the editor for screenshots.
                 .task {
@@ -307,7 +312,7 @@ struct SourceIcon: View {
     var size: CGFloat
     var body: some View { AppPerceptionTracking {
         if site.isBilibili { BilibiliMark(size: size) } else {
-            MonogramIcon(seed: site.name, label: label, size: size, systemImage: site.key == Hongguo.siteKey ? "play.rectangle.fill" : nil)
+            MonogramIcon(seed: site.name, label: label, size: size, systemImage: site.symbol)
         }
     } }
 }
@@ -650,6 +655,184 @@ struct SourceOrderEditor: View {
     #endif
 }
 
+/// Opens `HiddenSourcesEditor`, under the search order on the sources page.
+struct HideSourcesCard: View {
+    let hidden: Int
+    let open: () -> Void
+    private var value: String { hidden > 0 ? L10n.text("%lld hidden", hidden) : "" }
+    var body: some View {
+        #if os(tvOS)
+        Button(action: open) { TVSettingsRowLabel(title: L10n.text("Hide or Show Sources"), value: value, chevron: true) }
+            .glassRow()
+            .accessibilityIdentifier("sources.hidden.open")
+        #else
+        Button(action: open) {
+            HStack(spacing: 14) {
+                IconTile(symbol: "eye.slash", tint: Brand.teal, size: 40)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(L10n.text("Hide or Show Sources")).font(.headline).foregroundStyle(.primary)
+                    Text(L10n.text("Choose many sources at once, or a whole subscription.")).font(.subheadline).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 8)
+                if !value.isEmpty { Text(value).font(.subheadline).monospacedDigit().foregroundStyle(.secondary).lineLimit(1) }
+                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+            }
+            .padding(16)
+            .contentPanel(cornerRadius: 22)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("sources.hidden.open")
+        #endif
+    }
+}
+
+/// Hiding or showing many sources at once: a ticked source is shown; Show All and Hide All take a whole group.
+/// Sources stay in their own group here, hidden or not, and each change is saved at once.
+struct HiddenSourcesEditor: View {
+    @Environment(Store.self) private var store
+    @Environment(\.dismiss) private var dismiss
+
+    private func isHidden(_ site: Site) -> Bool {
+        store.subscription.map { store.hiddenSources.contains(site, origin: $0.origin) } ?? false
+    }
+    private func setHidden(_ sites: [Site], _ hidden: Bool) {
+        guard let config = store.subscription else { return }
+        store.hiddenSources.setHidden(sites, origin: config.origin, hidden: hidden)
+    }
+
+    var body: some View { AppPerceptionTracking {
+        let groups = store.sourceGroups(includeHidden: true)
+        let hiddenKeys = Set(groups.flatMap(\.sites).filter(isHidden).map(\.key))
+        let hiddenCount = hiddenKeys.count
+        #if os(tvOS)
+        NavigationStack {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 4) {
+                    Text(L10n.text("Ticked sources are shown. Hidden sources stay out of Watch Now and search."))
+                        .font(.system(size: 24)).foregroundStyle(.secondary).padding(.bottom, 12)
+                    if hiddenCount > 0 {
+                        TVSettingsAction(title: L10n.text("Show All Sources")) { setHidden(groups.flatMap(\.sites), false) }
+                            .padding(.bottom, 16)
+                    }
+                    ForEach(groups) { group in
+                        let hidden = group.sites.filter { hiddenKeys.contains($0.key) }
+                        Text(L10n.text(group.title)).font(.system(size: 31, weight: .semibold)).lineLimit(1)
+                            .padding(.top, 20).padding(.bottom, 6)
+                            .accessibilityAddTraits(.isHeader)
+                        HStack(spacing: 16) {
+                            TVSettingsAction(title: L10n.text("Show All")) { setHidden(group.sites, false) }.disabled(hidden.isEmpty)
+                            TVSettingsAction(title: L10n.text("Hide All")) { setHidden(group.sites, true) }.disabled(hidden.count == group.sites.count)
+                        }
+                        .focusSection()
+                        ForEach(group.sites) { site in
+                            let shown = !hiddenKeys.contains(site.key)
+                            Button { setHidden([site], shown) } label: {
+                                TVSettingsRowLabel(title: SourceLabel(site.name).parts[0], value: shown ? nil : L10n.text("Hidden")) {
+                                    Image(systemName: shown ? "checkmark.circle.fill" : "circle").font(.system(size: 30))
+                                }
+                            }
+                            .glassRow()
+                            .accessibilityAddTraits(shown ? [.isSelected] : [])
+                            .accessibilityIdentifier("sources.hidden.row." + site.key)
+                        }
+                    }
+                }
+                .glassRowInsets()
+            }
+            .screenTitle(L10n.text("Hide or Show Sources"))
+            .screenBackdrop()
+        }
+        .frame(width: 1100, height: 800)
+        .onExitCommand { dismiss() }
+        #else
+        NavigationStack {
+            List {
+                Section {
+                    Text(L10n.text("Ticked sources are shown. Hidden sources stay out of Watch Now and search."))
+                        .font(.subheadline).foregroundStyle(.secondary)
+                        #if os(iOS)
+                        .listRowBackground(Surface())
+                        #endif
+                }
+                ForEach(groups) { group in
+                    let hidden = group.sites.filter { hiddenKeys.contains($0.key) }
+                    Section {
+                        ForEach(group.sites) { site in
+                            let shown = !hiddenKeys.contains(site.key)
+                            Button { setHidden([site], shown) } label: { HiddenSourceRow(site: site, shown: shown) }
+                                .buttonStyle(.plain)
+                                .accessibilityAddTraits(shown ? [.isSelected] : [])
+                                .accessibilityIdentifier("sources.hidden.row." + site.key)
+                                #if os(iOS)
+                                .listRowBackground(Surface())
+                                #endif
+                        }
+                    } header: {
+                        HStack(spacing: 12) {
+                            Text(L10n.text(group.title)).lineLimit(1)
+                            Spacer(minLength: 8)
+                            Button(L10n.text("Show All")) { setHidden(group.sites, false) }.disabled(hidden.isEmpty)
+                            Button(L10n.text("Hide All")) { setHidden(group.sites, true) }.disabled(hidden.count == group.sites.count)
+                        }
+                        .buttonStyle(.borderless)
+                        .textCase(nil)
+                    }
+                }
+            }
+            #if os(iOS)
+            .scrollContentBackground(.hidden)
+            .background { Backdrop() }
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .navigationTitle(L10n.text("Hide or Show Sources"))
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(L10n.text("Done")) { dismiss() }.fontWeight(.semibold)
+                        .accessibilityIdentifier("sources.hidden.done")
+                }
+                #if os(iOS)
+                ToolbarItem(placement: .bottomBar) {
+                    Button(L10n.text("Show All Sources")) { setHidden(groups.flatMap(\.sites), false) }.disabled(hiddenCount == 0)
+                }
+                #else
+                ToolbarItem(placement: .destructiveAction) {
+                    Button(L10n.text("Show All Sources")) { setHidden(groups.flatMap(\.sites), false) }.disabled(hiddenCount == 0)
+                }
+                #endif
+            }
+        }
+        #if os(macOS)
+        .frame(width: 480, height: 600)
+        #endif
+        #endif
+    } }
+}
+
+#if !os(tvOS)
+/// One source in `HiddenSourcesEditor`: a tick while it is shown, its icon and name.
+private struct HiddenSourceRow: View {
+    let site: Site
+    let shown: Bool
+    var body: some View {
+        let label = SourceLabel(site.name)
+        HStack(spacing: 12) {
+            Image(systemName: shown ? "checkmark.circle.fill" : "circle").font(.title3)
+                .foregroundStyle(shown ? AnyShapeStyle(Brand.accent) : AnyShapeStyle(.secondary))
+            SourceIcon(site: site, label: label, size: 32).opacity(shown ? 1 : 0.45)
+            Text(label.parts[0]).font(.body.weight(.medium)).lineLimit(1)
+                .foregroundStyle(shown ? Color.primary : Color.secondary)
+            Spacer(minLength: 8)
+            if !shown { Text(L10n.text("Hidden")).font(.caption).foregroundStyle(.secondary) }
+        }
+        .padding(.vertical, 3)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
+}
+#endif
+
 struct SiteView: View {
     @Environment(Store.self) private var store
     @Environment(\.dismiss) private var dismiss
@@ -717,6 +900,11 @@ struct SiteView: View {
                         #endif
                         if site.isBilibili && !BilibiliAccount.load().signedIn { BilibiliSignInBanner() }
                         if hasCategories { categoryBar } else if initialLoading && folder == nil { ChipSkeletonRow() }
+                        if browser.query.isEmpty, let current = browser.categories.first(where: { $0.id == browser.category }), !current.filters.isEmpty {
+                            CategoryFilterBar(filters: current.filters, choices: browser.filters) { choices in
+                                startRequest { await browser.load(.list(category: current.id, query: "", page: 1, filters: choices), client: client) }
+                            }
+                        }
                         if isIndex && !videos.isEmpty {
                             Text(L10n.text("Choose a title to find it across your sources.")).font(.subheadline).foregroundStyle(.secondary)
                         }
@@ -763,8 +951,13 @@ struct SiteView: View {
         }
         .onDisappear { requestTask?.cancel(); browser.cancel() }
         .toolbar {
-            PinSourceButton(site: site, origin: origin)
-            HideSourceButton(site: site, origin: origin)
+            // Handed the store: UIKit can size a bar item before SwiftUI gives it the page's environment, and these
+            // buttons read Store first thing (a TestFlight crash on iPhone).
+            Group {
+                PinSourceButton(site: site, origin: origin)
+                HideSourceButton(site: site, origin: origin)
+            }
+            .environment(store)
         }
         .screenBackdrop()
         .onAppear {
@@ -803,7 +996,8 @@ struct SiteView: View {
                     ForEach(browser.categories) { item in
                         Chip(title: item.name, selected: isDefaultQuery && currentCategory == item.id) {
                             query = ""
-                            startRequest { await browser.load(.list(category: item.id, query: "", page: 1), client: client) }
+                            let filters = CategoryFilter.initialChoices(item.filters)
+                            startRequest { await browser.load(.list(category: item.id, query: "", page: 1, filters: filters), client: client) }
                         }
                     }
                 }
@@ -834,8 +1028,122 @@ struct SiteView: View {
         else { await browser.load(.list(category: nil, query: text, page: 1), client: client) }
     }
     private func load(page next: Int) async {
-        await browser.load(.list(category: browser.category.isEmpty ? nil : browser.category, query: browser.query, page: next), client: client)
+        await browser.load(.list(category: browser.category.isEmpty ? nil : browser.category, query: browser.query, page: next, filters: browser.filters),
+                           client: client)
     }
+}
+
+/// A category's filters (TVBox `filters`: 类型, 地区, 年份…) drawn as Discover's catalog search draws its own: one
+/// "地区：全部 ⌄" chip per filter. On the Mac a chip opens a popover of choices, on iPhone, iPad and Apple TV a
+/// menu. Each choice reloads the category from its first page.
+struct CategoryFilterBar: View {
+    let filters: [CategoryFilter]
+    let choices: [String: String]
+    let choose: ([String: String]) -> Void
+    #if os(macOS)
+    @State private var open: String?
+    #endif
+
+    private func value(_ filter: CategoryFilter) -> String { choices[filter.key] ?? filter.initial }
+    private func changed(_ filter: CategoryFilter) -> Bool { value(filter) != filter.initial }
+    private var anyChanged: Bool { filters.contains(where: changed) }
+    private func title(_ filter: CategoryFilter) -> String {
+        let current = value(filter)
+        return filter.name + "：" + (filter.options.first { $0.value == current }?.name ?? current)
+    }
+    private func pick(_ filter: CategoryFilter, _ option: String) {
+        guard value(filter) != option else { return }
+        var next = choices
+        next[filter.key] = option
+        choose(next)
+    }
+    private func reset() { choose(CategoryFilter.initialChoices(filters)) }
+
+    var body: some View {
+        #if os(macOS)
+        DiscoverChipFlow(spacing: 8) {
+            ForEach(filters) { filter in
+                Button { open = open == filter.key ? nil : filter.key } label: { FilterChipLabel(title: title(filter), open: open == filter.key) }
+                    .buttonStyle(.plain)
+                    .popover(isPresented: Binding(get: { open == filter.key }, set: { if !$0, open == filter.key { open = nil } }), arrowEdge: .bottom) {
+                        panel(filter)
+                    }
+                    .accessibilityIdentifier("site.filter.\(filter.key)")
+            }
+            if anyChanged {
+                Button(action: reset) {
+                    Label(L10n.text("Reset Filters"), systemImage: "xmark").font(.system(size: 13)).padding(.horizontal, 12).frame(height: 30)
+                        .contentShape(Capsule())
+                }.buttonStyle(.plain).foregroundStyle(.secondary).accessibilityIdentifier("site.filters.reset")
+            }
+        }
+        .accessibilityIdentifier("site.filters")
+        #if DEBUG
+        // `-qaOpenFilter <key>` opens that filter's choices, for screenshots.
+        .task { if let key = UserDefaults.standard.string(forKey: "qaOpenFilter") { try? await Task.sleep(for: .seconds(1)); open = key } }
+        #endif
+        #elseif os(tvOS)
+        ScrollView(.horizontal) {
+            HStack(spacing: 18) {
+                ForEach(filters) { filter in
+                    Menu { picker(filter) } label: { Text(title(filter)) }
+                        .menuStyle(.button)
+                        .buttonStyle(DiscoverTVChipStyle(active: changed(filter)))
+                        .accessibilityIdentifier("site.filter.\(filter.key)")
+                }
+                if anyChanged {
+                    Button(action: reset) { Label(L10n.text("Reset Filters"), systemImage: "xmark") }
+                        .buttonStyle(DiscoverTVChipStyle(active: false))
+                        .accessibilityIdentifier("site.filters.reset")
+                }
+            }.padding(.vertical, 16)
+        }
+        .scrollIndicators(.hidden).scrollClipDisabledCompat().focusSection()
+        .accessibilityIdentifier("site.filters")
+        #else
+        ScrollView(.horizontal) {
+            GlassGroup(spacing: 8) {
+                HStack(spacing: 8) {
+                    ForEach(filters) { filter in
+                        Menu { picker(filter) } label: { FilterChipLabel(title: title(filter)) }
+                            .accessibilityIdentifier("site.filter.\(filter.key)")
+                    }
+                    if anyChanged {
+                        Button(action: reset) { Image(systemName: "xmark").frame(width: 38, height: 38).glassSurface(.regular, in: Circle()) }
+                            .accessibilityLabel(L10n.text("Reset Filters")).accessibilityIdentifier("site.filters.reset")
+                    }
+                }
+            }
+        }
+        .scrollIndicators(.hidden).scrollClipDisabledCompat().frame(height: 38)
+        .tint(.primary)
+        .accessibilityIdentifier("site.filters")
+        #endif
+    }
+
+    #if os(macOS)
+    /// The filter's choices as Discover's filter popovers lay them out; a long list (years) scrolls.
+    private func panel(_ filter: CategoryFilter) -> some View {
+        let grid = LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
+            ForEach(filter.options, id: \.value) { option in
+                FilterChoiceButton(title: option.name, selected: value(filter) == option.value) {
+                    pick(filter, option.value)
+                    open = nil
+                }
+            }
+        }.padding(14)
+        return Group {
+            if filter.options.count > 30 { ScrollView { grid }.frame(height: 340) } else { grid }
+        }
+        .frame(width: 360)
+    }
+    #else
+    private func picker(_ filter: CategoryFilter) -> some View {
+        Picker(filter.name, selection: Binding(get: { value(filter) }, set: { pick(filter, $0) })) {
+            ForEach(filter.options, id: \.value) { Text($0.name).tag($0.value) }
+        }
+    }
+    #endif
 }
 
 /// Where a listed title opens: its details, or for a drive source's folder the folder's listing.
@@ -859,6 +1167,8 @@ struct VideoDetailView: View {
     #if os(iOS)
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var fullScreen = false
+    /// Full Screen came from turning the phone sideways, so turning it upright again returns to the page.
+    @State private var turnedFullScreen = false
     @State private var showsAllEpisodes = false
     @State private var episodeScroll: Episode.ID?
     /// The page's player shows its picture (or an error); until then the page's cover stays over it.
@@ -867,9 +1177,13 @@ struct VideoDetailView: View {
     @State private var coverBack = false
     /// The page's player, whose wait the cover tells about.
     @State private var playerSession: PlaybackSession?
+    /// The source's config center, open in the app (`ConfigCenterView`).
+    @State private var showsConfigCenter = false
     #endif
     @State private var requestTask: Task<Void, Never>?
     @State private var detail: Video?
+    /// Short labels (第1集) for lines whose episode names are file names, by episode id (#318). Display only.
+    @State private var episodeLabels: [Episode.ID: String] = [:]
     @State private var error: String?
     @State private var busy = false
     @State private var pendingPlan: PlaybackPlan?
@@ -966,6 +1280,9 @@ struct VideoDetailView: View {
         .onDisappear { requestTask?.cancel() }
         .task(id: detail?.id) { await startTMDB() }
         .onChangeCompat(of: choosingQuality) { _, open in if !open && !busy { loadingEpisode = nil } }
+        #if os(iOS)
+        .sheet(isPresented: $showsConfigCenter) { ConfigCenterView { await configCenterAddress() } }
+        #endif
         // Sign in where playback failed, then resume the episode that needed the account.
         #if !os(tvOS)
         .sheet(item: $bundleSignIn) { pending in
@@ -1146,9 +1463,13 @@ struct VideoDetailView: View {
         do {
             let value = try await client.detail(video.id, cached: client.site.type == 3 || client.site.type == 4)
             try Task.checkCancellation()
+            // Worked out once, off the main thread: a line can hold thousands of episodes.
+            let episodes = value.episodes
+            episodeLabels = await Task.detached(priority: .userInitiated) { EpisodeLabels.labels(episodes) }.value
             detail = value
-            // Start on a line that can play: not one from a drive the viewer has no way to sign in to.
-            if selectedFlag == nil { selectedFlag = CloudDrive.preferredFlag(flags) }
+            // Start on the line watched last (#362), else on one that can play: not one from a drive the viewer has no
+            // way to sign in to.
+            if selectedFlag == nil { selectedFlag = watchedFlag ?? CloudDrive.preferredFlag(flags) }
             #if os(tvOS)
             Task { try? await Task.sleep(for: .milliseconds(100)); playFocused = true }
             #endif
@@ -1174,6 +1495,28 @@ struct VideoDetailView: View {
         guard !TMDBMatch.labeledNotOnTMDB(request) else { tmdb.skip(); return }
         await tmdb.run(key: key, request: request)
     }
+    /// A video without episodes. A config center entry (a CatPawOpen bundle's, #311, or a Wex plugin's, #360) opens its page in the app.
+    @ViewBuilder private func noEpisodes(_ detail: Video) -> some View {
+        #if os(iOS)
+        if ConfigCenter.page(of: detail, site: client.site) != nil {
+            Button { showsConfigCenter = true } label: { Label(L10n.text("Open Config Center"), systemImage: "gearshape") }
+                .buttonStyle(.borderedProminent)
+                .accessibilityIdentifier("detail.configCenter")
+        } else {
+            Text(L10n.text("No playable sources were found for this video.")).foregroundStyle(.secondary)
+        }
+        #else
+        Text(L10n.text("No playable sources were found for this video.")).foregroundStyle(.secondary)
+        #endif
+    }
+    #if os(iOS)
+    /// The config center's address now. Asking the bundle again gives its current port, which changes when iOS took
+    /// back its socket while the app was suspended; the page's details can be older than that, or cached.
+    private func configCenterAddress() async -> URL? {
+        let fresh = try? await client.detail(video.id)
+        return (fresh ?? detail).flatMap { ConfigCenter.page(of: $0, site: client.site) }
+    }
+    #endif
     /// TMDB's story when it has one, else the source's synopsis.
     private func synopsisText(_ detail: Video) -> String {
         if let story = tmdb.details?.story, !story.isEmpty { return story }
@@ -1414,7 +1757,7 @@ struct VideoDetailView: View {
     @ViewBuilder private var episodePanel: some View {
         if let detail {
             if detail.episodes.isEmpty {
-                Text(L10n.text("No playable sources were found for this video.")).foregroundStyle(.secondary)
+                noEpisodes(detail)
             } else {
                 let items = activeEpisodes
                 VStack(alignment: .leading, spacing: 12) {
@@ -1489,12 +1832,15 @@ struct VideoDetailView: View {
     }
     #endif
 
+    /// What the pickers show for an episode: its short label when its line has them, else its name without the size tag.
+    private func episodeTitle(_ episode: Episode) -> String { episodeLabels[episode.id] ?? EpisodeRow.title(episode.name) }
+
     /// The episodes in the order the lists show them. Only the lists: Play and the next episode still follow the source.
     private func shownOrder(_ items: [Episode]) -> [Episode] { reversesEpisodes ? items.reversed() : items }
 
     private func episodeList(_ items: [Episode]) -> some View {
         // A chip fits about six characters before it truncates (《一…); longer names get rows.
-        let longNames = (items.map { $0.name.count }.max() ?? 0) > 6
+        let longNames = (items.map { (episodeLabels[$0.id] ?? $0.name).count }.max() ?? 0) > 6
         // Under a full-width banner, long names fill columns rather than one stretched list.
         let rowColumns = isWide ? [GridItem(.adaptive(minimum: 320), spacing: 8)] : [GridItem(.flexible())]
         // TMDB's stills, when its season lines up with most of the episodes and has pictures for them; without
@@ -1514,15 +1860,15 @@ struct VideoDetailView: View {
                         Group {
                             if showsStills {
                                 Button { startRequest { await play(episode) } } label: {
-                                    TMDBEpisodeTile(name: EpisodeRow.title(episode.name), info: stills[episode.id], loading: loadingEpisode == episode.id, width: nil)
+                                    TMDBEpisodeTile(name: episodeTitle(episode), info: stills[episode.id], loading: loadingEpisode == episode.id, width: nil)
                                 }
                                 .tmdbCardButton()
                                 .overlay(alignment: .topTrailing) { if saved?.status == .completed { DownloadedBadge().padding(4) } }
                                 .accessibilityLabel(episode.name)
                             } else if longNames {
-                                EpisodeRow(name: episode.name, loading: loadingEpisode == episode.id, download: saved) { startRequest { await play(episode) } }
+                                EpisodeRow(name: episode.name, label: episodeLabels[episode.id], loading: loadingEpisode == episode.id, download: saved) { startRequest { await play(episode) } }
                             } else {
-                                Chip(title: episode.name, selected: loadingEpisode == episode.id, fill: true) { startRequest { await play(episode) } }
+                                Chip(title: episodeLabels[episode.id] ?? episode.name, selected: loadingEpisode == episode.id, fill: true) { startRequest { await play(episode) } }
                                     .overlay(alignment: .topTrailing) { if saved?.status == .completed { DownloadedBadge() } }
                             }
                         }
@@ -1537,6 +1883,7 @@ struct VideoDetailView: View {
                             }
                         }
                         .contextMenu {
+                            if episodeLabels[episode.id] != nil { Text(episode.name) }
                             FavoriteMenuButton(item: episodeFavorite(episode), name: episode.name)
                             if saved == nil || saved?.status == .failed {
                                 Button(L10n.text("Download"), systemImage: "arrow.down.circle") {
@@ -1648,22 +1995,34 @@ struct VideoDetailView: View {
         }
     }
 
-    #if os(iOS)
-    // MARK: iPhone watch page
-
-    private var watchLayout: Bool { WatchPage.applies(sizeClass, verticalSizeClass) }
     /// This video's playback scopes (`PlaybackHistoryContext.id`); the details may carry another ID than the list's.
     private var watchScopes: Set<String> {
         let origin = client.site.origin(or: client.origin)
         return Set([video.id, detail?.id].compactMap { $0 }.map { EpisodeSkipSettings.scope(origin: origin, source: client.site.sourceKey, video: $0) })
     }
-    /// What plays at the top of the page: one of this video's episodes.
-    private var watchChannel: Channel? {
-        store.playing.flatMap { watchScopes.contains($0.historyContext?.id ?? "") ? $0 : nil }
-    }
     /// Where the viewer stopped last time, for Continue.
     private var watchHistory: PlaybackHistoryEntry? {
         store.playbackHistory.entries.first { watchScopes.contains($0.context.id) }
+    }
+    /// The line of the episode playing, else of the one watched last, while the details still have it: the page opens
+    /// on that line so the episode shows in its list, not on the first line (#362).
+    private var watchedFlag: String? {
+        guard let episodes = detail?.episodes else { return nil }
+        #if os(iOS)
+        let context = watchChannel?.historyContext ?? watchHistory?.context
+        #else
+        let context = watchHistory?.context
+        #endif
+        return context?.episode(in: episodes)?.flag
+    }
+
+    #if os(iOS)
+    // MARK: iPhone watch page
+
+    private var watchLayout: Bool { WatchPage.applies(sizeClass, verticalSizeClass) }
+    /// What plays at the top of the page: one of this video's episodes.
+    private var watchChannel: Channel? {
+        store.playing.flatMap { watchScopes.contains($0.historyContext?.id ?? "") ? $0 : nil }
     }
     /// The episode playing, else the one watched last: marked in the list, which scrolls to it.
     private var currentEpisodeID: Episode.ID? {
@@ -1697,21 +2056,29 @@ struct VideoDetailView: View {
         .onAppear {
             store.watchPageScopes.formUnion(watchScopes)
             PlayerOrientation.holdPortrait(true)
+            UIDevice.current.beginGeneratingDeviceOrientationNotifications()
         }
         .onChangeCompat(of: watchScopes) { old, new in
             store.watchPageScopes.subtract(old.subtracting(new)); store.watchPageScopes.formUnion(new)
         }
+        .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
+            phoneTurned()
+        }
         .onDisappear {
+            UIDevice.current.endGeneratingDeviceOrientationNotifications()
             // Leaving the page ends its playback, as the full-screen player's Back does.
             if watchChannel != nil { store.playing = nil }
             store.watchPageScopes.subtract(watchScopes)
             if fullScreen { fullScreen = false; PlayerOrientation.set(landscape: false) }
+            turnedFullScreen = false
             PlayerOrientation.holdPortrait(false)
         }
         .onChangeCompat(of: watchChannel == nil) { _, ended in
             playerStarted = false
             if ended { playerSession = nil }
             if ended && fullScreen { setFullScreen(landscape: false) }
+            // Started with the phone already sideways: Full Screen at once, as turning it would.
+            if !ended { phoneTurned() }
         }
         .sheet(isPresented: $showsAllEpisodes) { AppPerceptionTracking { allEpisodes } }
     }
@@ -1741,9 +2108,30 @@ struct VideoDetailView: View {
 
     private func setFullScreen(landscape: Bool) {
         let entering = !fullScreen
+        // A button's Full Screen stays until the viewer leaves it; turning the phone back upright ends only a
+        // Full Screen the turning opened.
+        if !entering { turnedFullScreen = false }
         withAnimation(.smooth(duration: 0.3)) { fullScreen = entering }
         // A landscape picture turns the phone; a portrait one fills the screen upright.
         if !entering { PlayerOrientation.set(landscape: false) } else if landscape { PlayerOrientation.set(landscape: true) }
+    }
+
+    /// Turning the phone sideways while its video plays opens Full Screen, as the player's button does, and turning
+    /// it upright again returns to the page. The watch page holds the interface upright (`PlayerOrientation`), so it
+    /// doesn't turn by itself: this listens to the phone's own turning instead.
+    private func phoneTurned() {
+        guard watchChannel != nil, PlayerOrientation.available else { return }
+        switch UIDevice.current.orientation {
+        case .landscapeLeft, .landscapeRight:
+            guard !fullScreen else { return }
+            turnedFullScreen = true
+            setFullScreen(landscape: true)
+        case .portrait:
+            guard fullScreen, turnedFullScreen else { return }
+            setFullScreen(landscape: false)
+        default:
+            break
+        }
     }
 
     /// The cover's Play: where the viewer stopped, else the line's first episode.
@@ -1834,7 +2222,7 @@ struct VideoDetailView: View {
     @ViewBuilder private var watchEpisodes: some View {
         if let detail {
             if detail.episodes.isEmpty {
-                Text(L10n.text("No playable sources were found for this video.")).foregroundStyle(.secondary)
+                noEpisodes(detail)
             } else {
                 let items = activeEpisodes
                 let tile = compactTileWidth(items)
@@ -1920,7 +2308,7 @@ struct VideoDetailView: View {
     private func compactTileWidth(_ items: [Episode]) -> CGFloat? {
         var widest = "", widestUnits = 0
         for item in items {
-            let title = EpisodeRow.title(item.name)
+            let title = episodeTitle(item)
             guard title.count <= 5 else { return nil }
             // Chinese and other wide characters take about twice the room of digits and Latin letters.
             let units = title.unicodeScalars.reduce(0) { $0 + ($1.isASCII ? 1 : 2) }
@@ -1948,13 +2336,13 @@ struct VideoDetailView: View {
             startRequest { await play(episode) }
         } label: {
             if let info {
-                TMDBEpisodeTile(name: EpisodeRow.title(episode.name), info: info, current: current, loading: loadingEpisode == episode.id,
+                TMDBEpisodeTile(name: episodeTitle(episode), info: info, current: current, loading: loadingEpisode == episode.id,
                                 width: fill ? nil : 168)
                     .overlay(alignment: .topTrailing) { if saved?.status == .completed { DownloadedBadge().padding(4) } }
             } else {
             HStack(spacing: 6) {
                 if loadingEpisode == episode.id { ProgressView().controlSize(.small) }
-                Text(EpisodeRow.title(episode.name)).lineLimit(compact ? 1 : 2)
+                Text(episodeTitle(episode)).lineLimit(compact ? 1 : 2)
                     .multilineTextAlignment(compact ? .center : .leading)
             }
             .font(.subheadline.weight(current ? .semibold : .regular))
@@ -1973,6 +2361,7 @@ struct VideoDetailView: View {
         .id(episode.id)
         .accessibilityAddTraits(current ? .isSelected : [])
         .contextMenu {
+            if episodeLabels[episode.id] != nil { Text(episode.name) }
             if saved == nil || saved?.status == .failed {
                 Button(L10n.text("Download"), systemImage: "arrow.down.circle") {
                     DownloadLibrary.shared.download(DownloadSource(site: client.site, videoID: video.id, episode: episode),
@@ -2167,6 +2556,8 @@ private enum CloudDrive: String, Identifiable {
 /// Episode names often lead with a size tag ("[1.18GB] S01E41.mkv"); show it as trailing detail.
 private struct EpisodeRow: View {
     let name: String
+    /// The episode's short label (第1集), shown in place of the name; the size tag stays as detail.
+    var label: String? = nil
     let loading: Bool
     var download: DownloadItem? = nil
     let action: () -> Void
@@ -2186,7 +2577,10 @@ private struct EpisodeRow: View {
         (13, 10, 36, 12)
         #endif
     }
-    private var parts: (title: String, detail: String?) { Self.split(name) }
+    private var parts: (title: String, detail: String?) {
+        let parts = Self.split(name)
+        return (label ?? parts.title, parts.detail)
+    }
     var body: some View { AppPerceptionTracking {
         let parts = parts
         let button = Button(action: action) {

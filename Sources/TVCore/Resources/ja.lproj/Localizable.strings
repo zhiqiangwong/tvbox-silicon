@@ -97,6 +97,7 @@
 "Video Details" = "動画の詳細";
 "This media cannot be played. Try another channel or source." = "このメディアは再生できません。別のチャンネルやソースをお試しください。";
 "Playback was interrupted." = "再生が中断されました。";
+"The connection dropped. Reconnecting" = "接続が切れました。再接続しています";
 "Close" = "閉じる";
 "Connecting…" = "接続中…";
 "Enter a valid HTTP or HTTPS URL." = "有効な HTTP または HTTPS URL を入力してください。";
@@ -378,6 +379,8 @@
 "Try another keyword." = "別のキーワードを試してください。";
 "Show Details" = "詳細を表示";
 "Hide Details" = "詳細を隠す";
+"Show as List" = "リスト表示";
+"Show as Grid" = "グリッド表示";
 "%lld of %lld sources responded" = "%lld / %lld ソースが応答";
 "First-time setup can take a few minutes. Keep the app open." = "初回の準備には数分かかることがあります。アプリを開いたままにしてください。";
 "This source requires Android features that the plugin runtime does not support yet." = "この配信ソースは、プラグイン実行環境で未対応のAndroid機能を必要とします。";
@@ -526,6 +529,7 @@
 "Storage" = "ストレージ";
 "%@ free" = "空き %@";
 "used by downloads" = "ダウンロードで使用中";
+"%@ used by downloads" = "ダウンロードで %@ 使用中";
 "Other" = "その他";
 "Free" = "空き";
 "tvOS may remove downloads when Apple TV runs low on storage." = "Apple TV の空き容量が少なくなると、tvOS がダウンロードを削除することがあります。";
@@ -615,6 +619,13 @@
 "Manage Sources" = "配信ソースを管理";
 "Hidden Sources" = "隠したソース";
 "Hidden" = "非表示";
+"Hide or Show Sources" = "ソースの表示と非表示";
+"%lld hidden" = "%lld 件非表示";
+"Choose many sources at once, or a whole subscription." = "複数のソースや配信設定全体をまとめて選べます。";
+"Ticked sources are shown. Hidden sources stay out of Watch Now and search." = "チェックしたソースが表示されます。非表示のソースは「今すぐ観る」と検索に表示されません。";
+"Show All Sources" = "すべてのソースを表示";
+"Show All" = "すべて表示";
+"Hide All" = "すべて隠す";
 "Pinned Sources" = "固定したソース";
 "Search history" = "視聴履歴を検索";
 "Manage history" = "履歴を管理";
@@ -651,6 +662,8 @@
 
 "Hongguo" = "Hongguo";
 "Episode %@" = "エピソード %@";
+"Episode %1$@" = "第%1$@話";
+"Episodes %1$@–%2$@" = "第%1$@-%2$@話";
 "Live-action Drama" = "実写ドラマ";
 "Animated Drama" = "アニメドラマ";
 "AI Drama" = "AI ドラマ";
@@ -745,6 +758,7 @@
 "%@ needs this account for the line you chose. The video plays once you confirm." = "「%@」のこの回線にはこのアカウントが必要です。確認すると再生が始まります。";
 "Sign in to Quark and UC on their official page, and to Baidu and Aliyun by scanning a code with their phone app. Yingxia stores the login on this Mac and supplies it to the plugins you run." = "Quark と UC は公式ページで、Baidu と Aliyun はスマートフォンのアプリでコードをスキャンしてサインインします。映匣はログイン情報をこの Mac に保存し、実行するプラグインに渡します。";
 "Baidu Cookie (BDUSS, STOKEN)" = "Baidu の Cookie（BDUSS、STOKEN）";
+"115 Cookie (UID, CID, SEID)" = "115 Cookie（UID、CID、SEID）";
 
 /* Music */
 "Music" = "ミュージック";
@@ -765,9 +779,10 @@
 "Back 15 Seconds" = "15 秒戻る";
 "Forward 15 Seconds" = "15 秒進む";
 "Channels" = "再生チャンネル";
+"Open in Video Player" = "ビデオプレーヤーで開く";
 "The quality shown is read from the audio itself, not taken from what a channel claims." = "表示される音質は、チャンネルの申告ではなく音声そのものから読み取ったものです。";
 "Not tried yet" = "未試行";
-"Lossless first plays the best lossy stream, marked as such, when no channel has lossless audio. Lossless only stops instead." = "「ロスレス優先」は、ロスレス音声のあるチャンネルがないとき、最良の非可逆圧縮音声をその旨を表示して再生します。「ロスレスのみ」は再生しません。";
+"Lossless first plays the best lossy stream, marked as such, when no channel has lossless audio. Lossless only stops instead. High and Standard ask every channel for 320 or 128 kbps lossy audio, which uses far less data." = "「ロスレス優先」は、ロスレス音声のあるチャンネルがないとき、最良の非可逆圧縮音声をその旨を表示して再生します。「ロスレスのみ」は再生しません。「高」と「標準」はすべてのチャンネルに 320 または 128 kbps の非可逆圧縮音声を要求し、通信量を大幅に抑えます。";
 "QQ Music" = "QQ Music";
 "NetEase Cloud Music" = "NetEase Cloud Music";
 "QQ Music, when VKeys fails" = "QQ Music（VKeys が失敗したとき）";
@@ -787,6 +802,8 @@
 "GD Music" = "GD音乐台";
 "Lossless first" = "ロスレス優先";
 "Lossless only" = "ロスレスのみ";
+"High (320 kbps)" = "高（320 kbps）";
+"Standard (128 kbps)" = "標準（128 kbps）";
 "No matching song was found." = "一致する曲が見つかりませんでした。";
 "This channel has no audio for the song." = "このチャンネルにはこの曲の音声がありません。";
 "This channel only has a %lld-second preview." = "このチャンネルには %lld 秒の試聴しかありません。";
@@ -833,6 +850,7 @@
 "Choose your tabs and their order." = "表示するタブとその順番を選べます。";
 "Drag to reorder. Up to four sections fit in the tab bar; the rest stay in More." = "ドラッグして並べ替えます。タブバーには4つまで置けて、残りは「その他」に入ります。";
 "Drag to reorder. Up to seven sections fit in the tab bar here, and four when the phone is closed; the rest stay in More." = "ドラッグして並べ替えます。ここではタブバーに7つまで、閉じたときは4つまで置けて、残りは「その他」に入ります。";
+"Drag to reorder. The tab bar and the sidebar show sections in this order." = "ドラッグして並べ替えます。タブバーとサイドバーはこの順番で表示されます。";
 "Add" = "追加";
 "Paste the address of a TVBox JSON subscription, an M3U or TXT live playlist, or an AList server." = "TVBox JSON 配信設定、M3U / TXT ライブ再生リスト、または AList サーバのアドレスを貼り付けます。";
 "Up to Date" = "最新";
@@ -974,7 +992,7 @@
 "Added the AList server %@. Browse it in Cloud Files." = "AList サーバ %@ を追加しました。クラウドファイルで閲覧できます。";
 "Added %lld AList servers. Browse them in Cloud Files." = "AList サーバを %lld 台追加しました。クラウドファイルで閲覧できます。";
 "This address is now an AList server. Add it again to browse it in Cloud Files." = "このアドレスは現在 AList サーバです。追加し直すとクラウドファイルで閲覧できます。";
-"Sign in to Quark or UC under Cloud Drive Accounts to browse their files here." = "クラウドドライブのアカウントで Quark または UC にサインインすると、ここでファイルを閲覧できます。";
+"Sign in to Quark, UC or 115 under Cloud Drive Accounts to browse their files here." = "クラウドドライブのアカウントで Quark、UC または 115 にサインインすると、ここでファイルを閲覧できます。";
 "Add an AList or OpenList server, a NAS's WebDAV share, or an Emby or Jellyfin server, by the address you open it at. Pasting an AList address, or a TVBox AList configuration, in Add Subscription adds servers too." = "AList・OpenList サーバ、NAS の WebDAV 共有、Emby・Jellyfin サーバは、開くときのアドレスで追加します。AList のアドレスや TVBox の AList 設定を「配信設定を追加」に貼り付けても追加できます。";
 "Edit Server" = "サーバを編集";
 "Remove Server" = "サーバを削除";
@@ -1029,6 +1047,7 @@
 "Touch and Hold Speed" = "長押しの再生速度";
 "Touch and hold the video to play at this speed. Slide sideways to change it, or slide down to keep it after you let go." = "動画を長押しするとこの速度で再生します。押したまま左右にスライドすると速度を変更、下にスライドすると指を離しても維持します。";
 "Slide sideways to change the speed, or down to keep it" = "左右にスライドで速度を変更、下にスライドで固定";
+"Slowed down to keep up with the connection" = "通信速度に合わせて速度を下げています";
 "Back to Normal Speed" = "通常の速度に戻す";
 "%lld s" = "%lld 秒";
 "Brightness" = "明るさ";
@@ -1350,3 +1369,59 @@
 "This build is missing its Dandanplay API configuration." = "このビルドにはDandanplay API設定がありません。";
 "Uses Dandanplay first, then tries iQIYI and Tencent Video if no comments are found or the service is unavailable. Official public episode pages are sent to dmku, or to danmu.zxz.ee when dmku has none; stream URLs and playback headers are never sent." = "Dandanplayを優先し、コメントが見つからないかサービスを利用できない場合はiQIYIとTencent Videoを検索します。dmku（見つからない場合は danmu.zxz.ee）には公式の公開エピソードページのみ送信し、ストリームURLや再生ヘッダーは送信しません。";
 "Dandanplay has reached its request limit for now. Try again later, or choose another danmaku server." = "Dandanplayのリクエスト上限に達しました。しばらくしてからもう一度試すか、別の弾幕サーバーを選んでください。";
+"Open Config Center" = "設定センターを開く";
+"Config Center" = "設定センター";
+"Top Charts" = "ランキング";
+"Recommended Playlists" = "おすすめプレイリスト";
+"New Albums" = "ニューアルバム";
+"More Charts" = "その他のランキング";
+"Add from File…" = "ファイルから追加…";
+"A TVBox JSON subscription, or one Python (.py) or JavaScript (.js) spider." = "TVBox JSON 配信設定、または単体の Python（.py）/ JavaScript（.js）スパイダー。";
+"This file is no longer on this device. Add it again." = "このファイルはこのデバイスにありません。もう一度追加してください。";
+"LX Music Sources" = "LX Music カスタムソース";
+"LX Music Source" = "LX Music ソース";
+"This file is not an LX Music source." = "このファイルは LX Music のカスタムソースではありません。";
+"This source plays none of the catalogs Yingxia searches (QQ Music, NetEase Cloud Music, Kuwo, Migu)." = "このソースは映匣が検索するカタログ（QQ Music、NetEase Cloud Music、Kuwo、Migu）のどれにも対応していません。";
+"The LX Music source did not start: %@" = "LX Music ソースを開始できませんでした: %@";
+"Scripts made for LX Music's custom sources. They are asked for a song's audio after the channels above, for QQ Music, NetEase Cloud Music, Kuwo and Migu songs. Yingxia includes none: add only sources you trust." = "LX Music のカスタムソース用のスクリプトです。QQ Music、NetEase Cloud Music、Kuwo、Migu の曲について、上のチャンネルのあとで音声を問い合わせます。映匣には付属しません。信頼できるソースだけを追加してください。";
+"Added “%@”." = "「%@」を追加しました。";
+"Remove “%@”" = "「%@」を削除";
+"Add from Address" = "アドレスから追加";
+"Source address" = "ソースのアドレス";
+"Music Extensions" = "音楽拡張機能";
+"Music Extension" = "音楽拡張機能";
+"Extension" = "拡張機能";
+"Extension address" = "拡張機能のアドレス";
+"This file is not a music extension." = "このファイルは音楽拡張機能ではありません。";
+"The music extension failed: %@" = "音楽拡張機能のエラー：%@";
+"This extension plays songs through an LX Music source." = "この拡張機能は LX Music の音源で曲を再生します。";
+"This extension plays songs through an LX Music source. Add one in Music Settings." = "この拡張機能は LX Music の音源で曲を再生します。音楽設定で追加してください。";
+"None of your LX Music sources plays this song's catalog." = "追加した LX Music の音源はどれもこの曲のカタログに対応していません。";
+"This extension asks an LX Music source for something Yingxia doesn't support." = "この拡張機能が LX Music の音源に求める内容には、映匣はまだ対応していません。";
+"Scripts in the Listenify music extension format. Their charts and playlists show on the Music page and their songs in Music search; songs play from what the extension gives, or through your LX Music sources when it asks for one. Yingxia includes none: add only extensions you trust." = "Listenify 形式の音楽拡張機能スクリプトです。チャートとプレイリストはミュージックページに、曲はミュージック検索に表示されます。曲は拡張機能が示すアドレスから、または必要なとき LX Music の音源を通して再生されます。映匣には拡張機能は含まれていません。信頼できるものだけを追加してください。";
+"Douban Hot Lists" = "Douban 人気リスト";
+"Douban Hot Movies" = "Douban 人気映画";
+"Douban Hot Series" = "Douban 人気ドラマ";
+"Douban Hot Variety Shows" = "Douban 人気バラエティ";
+"Douban" = "Douban";
+
+"%@ (Translated from %@)" = "%@（%@から翻訳）";
+
+"Airing Schedule" = "放送スケジュール";
+"Anime" = "アニメ";
+"Nothing Airing" = "この日の放送はありません";
+"Couldn't load the airing schedule." = "放送スケジュールを読み込めませんでした。";
+"Data:" = "データ提供：";
+"The schedule sources can't be reached right now, so this is an older copy." = "スケジュールの提供元に接続できないため、以前のデータを表示しています。";
+"Full Schedule" = "すべてのスケジュール";
+"Chinese Series" = "中国ドラマ";
+"Hong Kong & Taiwan Series" = "香港・台湾ドラマ";
+"American Series" = "アメリカのドラマ";
+"Japanese Series" = "日本のドラマ";
+"Korean Series" = "韓国ドラマ";
+"British Series" = "イギリスのドラマ";
+"Today" = "今日";
+"Airs Next" = "まもなく放送";
+"Anime Airing Today" = "今日のアニメ";
+"Series Airing Today" = "今日のドラマ";
+"Day" = "曜日";

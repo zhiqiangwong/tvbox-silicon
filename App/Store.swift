@@ -6,12 +6,16 @@ import TVCore
     let searchModel = SearchModel()
     /// Song search and the music player; both outlive the Music page, so a song keeps playing elsewhere in the app.
     /// The Mac and Apple TV list every kind at once, in rows; a phone or iPad starts on songs.
+    /// Music extensions the listener imported search alongside the catalogs; with none, they answer nothing at once.
     #if os(macOS) || os(tvOS)
-    let musicSearch = MusicSearchModel(kind: .top)
+    let musicSearch = MusicSearchModel(catalogs: MusicSearchModel.defaultCatalogs() + [MusicExtensionCatalog()], kind: .top)
     #else
-    let musicSearch = MusicSearchModel()
+    let musicSearch = MusicSearchModel(catalogs: MusicSearchModel.defaultCatalogs() + [MusicExtensionCatalog()])
     #endif
     let music = MusicPlaybackSession()
+    /// The Music page's charts, playlists and new albums; fetched when that page first shows.
+    /// The music extensions' library groups come after the catalogs' shelves.
+    let musicBrowse = MusicBrowseModel(sources: MusicBrowseModel.defaultSources() + [MusicExtensionCatalog()])
     let recommendationModel = RecommendationModel()
     let playbackHistory: PlaybackHistory
     let playbackDefaults: UserDefaults
@@ -38,8 +42,16 @@ import TVCore
     let favorites: Favorites
     var importing = false
     var error: String?
+    /// Why the last subscription import failed. It shows under the address field, not in the app-wide alert: on
+    /// iPhone and iPad that alert closed the Add Subscription sheet over it and took the viewer out of the form (#357).
+    var importError: String?
     var notice: String?
-    var playing: Channel?
+    var playing: Channel? {
+        // An episode of a listening source (audiobooks, radio, songs) plays in the music player instead (#289).
+        didSet { if let channel = playing, let queue = listeningQueue(for: channel) { playing = nil; listen(queue, from: channel) } }
+    }
+    /// Set while a listening source's episode goes to the video player on purpose.
+    @PerceptionIgnored private var playsAsVideo = false
     /// The videos whose iPhone watch page is on screen (`PlaybackHistoryContext.id`): their episodes play at the top
     /// of the page instead of in the full-screen player.
     var watchPageScopes: Set<String> = []
@@ -59,8 +71,15 @@ import TVCore
     private var episodeTask: Task<Void, Never>?
     var section: AppSection = .home
     /// Every build shows the built-in services (Music, Bilibili, Douyin), the default subscription and
-    /// the plugin pages only once a subscription has been added.
-    var extrasUnlocked: Bool { !subscriptions.isEmpty }
+    /// the plugin pages only once a subscription that works has been added: one that is on and whose
+    /// copy has sources or live playlists.
+    var extrasUnlocked: Bool {
+        subscriptions.contains { $0.enabled && documents[$0.address].map { !$0.sites.isEmpty || !$0.lives.isEmpty } == true }
+    }
+    /// Yingxia's own sources (`CloudSources`), added beside the viewer's subscriptions once one works.
+    private(set) var cloudDocument: Subscription?
+    @PerceptionIgnored private var cloudFetchedAt: Date?
+    @PerceptionIgnored private var cloudFetch: Task<Void, Never>?
     /// Sections kept out of the tab bar and sidebar until then.
     var hiddenSections: [AppSection] { extrasUnlocked ? [] : [.music] }
     private let defaults: UserDefaults
@@ -125,6 +144,9 @@ import TVCore
         }
         subscriptions = entries
         documents = copies
+        let cloud = (try? Data(contentsOf: Self.cloudFile)).flatMap { try? JSONDecoder().decode(Subscription.self, from: $0) }.flatMap { CloudSources.accepts($0) ? $0 : nil }
+        cloudDocument = cloud
+        CloudSources.current = cloud
         subscriptionAddress = ""
         if persistsChanges, let legacyAddress {
             if let legacy, copies[legacyAddress] != nil { try? Self.save(legacy, to: Self.file(for: entries[0])) }
@@ -144,13 +166,76 @@ import TVCore
         }
         // Songs that were downloading when the app quit carry on.
         MusicDownloadLibrary.shared.wake()
+        setUpListening()
         setUpCloudSync()
     }
+    // MARK: Listening sources (#289)
+
+    /// The music player's queue for an episode of a listening source: the episodes of its line, from it on. Nil for
+    /// other sources, for one whose streams turned out to be videos, and when the episode's details aren't at hand.
+    private func listeningQueue(for channel: Channel) -> MusicQueue? {
+        guard !playsAsVideo, let context = channel.historyContext, let catalog = catalog(for: channel),
+              AudioSources.isCandidate(catalog.client.site),
+              !AudioSourceVerdicts(defaults: playbackDefaults).showsVideo(context),
+              let episode = context.episode(in: catalog.video.episodes) else { return nil }
+        return AudioSources.queue(video: catalog.video, from: episode, site: catalog.client.site, origin: catalog.client.origin)
+    }
+
+    /// Plays the queue from the channel's stream, where this chapter stopped last time.
+    private func listen(_ queue: MusicQueue, from channel: Channel) {
+        var position = channel.resumePosition
+        if position == nil, let context = channel.historyContext,
+           let saved = playbackHistory.entries.first(where: { $0.id == context.id }),
+           saved.context.episodeID == context.episodeID, saved.context.episodeFlag == context.episodeFlag, saved.resumePosition > 1 {
+            position = saved.resumePosition
+        }
+        Diagnostics.shared.record(.info, "music", "listening source \(channel.historyContext?.sourceKey ?? "-") queue=\(queue.tracks.count)")
+        music.play(queue, at: position, stream: channel)
+    }
+
+    /// The music player gets a source's streams from here, saves where a book is in the playback history, and hands
+    /// an episode with a picture, or one it can't play, to the video player.
+    private func setUpListening() {
+        music.resolveSource = { [weak self] source in
+            guard let self else { throw CancellationError() }
+            return try await self.resolveListening(source)
+        }
+        music.recordSource = { [weak self] source, position, duration in
+            self?.playbackHistory.record(source.context, position: position, duration: duration)
+        }
+        music.handOffSource = { [weak self] stream, position, picture, covered in
+            guard let self, let context = stream.historyContext else { return }
+            if picture { AudioSourceVerdicts(defaults: self.playbackDefaults).recordVideo(context) }
+            let channel = Channel(name: stream.name, group: stream.group, url: stream.url, logo: stream.logo, headers: stream.headers,
+                                  skipScope: stream.skipScope, historyContext: context, resumePosition: position > 1 ? position : nil,
+                                  subtitles: stream.subtitles)
+            Task { @MainActor [weak self] in
+                // The video player can't open while Now Playing is still closing (as PlayOn waits for the player).
+                if covered { try? await Task.sleep(for: .milliseconds(700)) }
+                guard let self, self.playing == nil else { return }
+                self.playsAsVideo = true
+                self.playing = channel
+                self.playsAsVideo = false
+            }
+        }
+    }
+
+    /// A chapter's stream from its source, as Continue Watching gets an episode's.
+    private func resolveListening(_ source: MusicSourceEpisode) async throws -> Channel {
+        let context = source.context
+        guard let client = historyClient(PlaybackHistoryEntry(context: context, position: 0, duration: 0, updatedAt: Date())) else {
+            throw TVError.unsupported(L10n.text("This history source is no longer in the current subscription. Restore that subscription to continue."))
+        }
+        let resolved = try await client.playback(source.episode)
+        return Channel(name: "\(context.videoName) · \(context.episodeName)", group: resolved.group, url: resolved.url, logo: resolved.logo,
+                       headers: resolved.headers, skipScope: context.id, historyContext: context, subtitles: resolved.subtitles)
+    }
+
     /// The current media address of a downloading episode, from its source; the queue asks again when a link expires.
     private func resolveDownload(_ item: DownloadItem) async throws -> Channel {
         let config = subscription
         guard let site = config?.sites.first(where: { $0.key == item.source.siteKey })
-                ?? Site.builtInSites.first(where: { $0.key == item.source.siteKey }) else {
+                ?? cloudDocument?.sites.first(where: { $0.key == item.source.siteKey }) else {
             throw TVError.unsupported(L10n.text("%@ is no longer in your subscription, so this download can't continue.", item.source.siteName))
         }
         let base = CatalogClient(site: site, origin: config?.origin ?? URL(string: "https://example.invalid/")!, jarURL: config?.spiderURL)
@@ -187,6 +272,7 @@ import TVCore
         #endif
     }
     private static var legacyFile: URL { subscriptionDirectory.appending(path: "subscription.json") }
+    private static var cloudFile: URL { subscriptionDirectory.appending(path: "cloud-sources.json") }
     private static func file(for entry: SubscriptionEntry) -> URL {
         subscriptionDirectory.appending(path: "subscriptions").appending(path: entry.cacheName)
     }
@@ -211,7 +297,7 @@ import TVCore
     /// adds every subscription it lists, switched off, for the viewer to choose from.
     func importSubscription(address: String? = nil) async {
         guard !importing else { return }
-        importing = true; error = nil; notice = nil
+        importing = true; importError = nil; notice = nil
         defer { importing = false }
         let typed = (address ?? subscriptionAddress).trimmingCharacters(in: .whitespacesAndNewlines)
         do {
@@ -242,15 +328,31 @@ import TVCore
             rebuildSubscription()
         } catch {
             Diagnostics.shared.failure("subscription", "import host=\((try? WebAddress.resolve(typed))?.host() ?? "-")", error)
-            self.error = L10n.text("Import failed: %@", error.localizedDescription)
+            importError = L10n.text("Import failed: %@", error.localizedDescription)
         }
+    }
+    /// Adds a subscription, or one spider script, from a file the viewer picked. The file is copied
+    /// into the app (see `ImportedFiles`) and then added like an address.
+    func importSubscriptionFile(_ file: URL) async {
+        let scoped = file.startAccessingSecurityScopedResource()
+        let copied = Result { try ImportedFiles.add(file) }
+        if scoped { file.stopAccessingSecurityScopedResource() }
+        guard case .success(let url) = copied else {
+            if case .failure(let error) = copied { importError = L10n.text("Import failed: %@", error.localizedDescription) }
+            return
+        }
+        let address = url.absoluteString, known = subscriptions.contains { $0.address == address }
+        await importSubscription(address: address)
+        // A file that added no subscription of its own leaves no copy behind.
+        if !known, !subscriptions.contains(where: { $0.address == address }) { ImportedFiles.remove(address) }
     }
     /// Fetches every enabled subscription again; one that fails keeps its last good copy.
     func refreshSubscriptions() async {
         guard !importing else { return }
-        importing = true; error = nil; notice = nil
+        importing = true; importError = nil; notice = nil
         defer { importing = false }
         await fetch(subscriptions.filter(\.enabled))
+        refreshCloudSources(force: true)
         let failed = subscriptions.filter { $0.enabled && subscriptionErrors[$0.address] != nil }.count
         if failed > 0 { notice = L10n.text("%lld subscriptions could not be refreshed; their last copies stay in use.", failed) }
     }
@@ -274,7 +376,7 @@ import TVCore
         subscriptions.removeAll { addresses.contains($0.address) }
         for entry in removed {
             documents[entry.address] = nil; subscriptionErrors[entry.address] = nil
-            if persistsChanges { try? FileManager.default.removeItem(at: Self.file(for: entry)) }
+            if persistsChanges { try? FileManager.default.removeItem(at: Self.file(for: entry)); ImportedFiles.remove(entry.address) }
         }
         saveSubscriptionList()
         rebuildSubscription()
@@ -383,7 +485,8 @@ import TVCore
     /// Shows every enabled subscription that has a copy, merged in list order.
     private func rebuildSubscription(resetting: Bool = true) {
         if resetting { searchModel.reset(); recommendationModel.reset() }
-        subscription = Subscription.merge(subscriptions.filter(\.enabled).compactMap { documents[$0.address] })?.withBuiltInSites()
+        subscription = Subscription.merge(subscriptions.filter(\.enabled).compactMap { documents[$0.address] })?.withCloudSources(extrasUnlocked ? cloudDocument : nil)
+        refreshCloudSources()
         if let subscription {
             Self.registerPlugins(subscription)
             hiddenSources.restoreBuiltIns(subscription.sites, origin: subscription.origin)
@@ -394,6 +497,30 @@ import TVCore
             let origin = subscription.origin, spider = subscription.spiderURL
             Task { await PluginConversionAhead.shared.schedule(sites: visible, origin: origin, spider: spider) }
             #endif
+        }
+    }
+    /// Fetches Yingxia's own subscription while a subscription works: at once when there is no copy, else
+    /// every ten minutes at most. A failed fetch keeps the last copy.
+    private func refreshCloudSources(force: Bool = false) {
+        guard extrasUnlocked, cloudFetch == nil else { return }
+        if !force, cloudDocument != nil, let fetched = cloudFetchedAt, Date.now.timeIntervalSince(fetched) < 600 { return }
+        let http = http, persists = persistsChanges
+        cloudFetch = Task { [weak self] in
+            let result: Result<Subscription, any Error>
+            do { result = .success(try await CloudSources.fetch(http: http)) } catch { result = .failure(error) }
+            guard let self else { return }
+            self.cloudFetch = nil
+            self.cloudFetchedAt = .now
+            switch result {
+            case .success(let document):
+                if persists, let data = try? JSONEncoder().encode(document) { try? Self.save(data, to: Self.cloudFile) }
+                CloudSources.current = document
+                let changed = (try? JSONEncoder().encode(document.raw)) != (try? JSONEncoder().encode(self.cloudDocument?.raw))
+                self.cloudDocument = document
+                if changed { self.rebuildSubscription() }
+            case .failure(let error):
+                Diagnostics.shared.failure("subscription", "built-in sources", error)
+            }
         }
     }
     private func refreshCloudFilesSources() {
@@ -536,7 +663,18 @@ import TVCore
         if let data = try? JSONEncoder().encode(video) {
             MediaCache.shared.store(data, for: "detail", kind: .catalog, scope: context.id, ttl: 6 * 3600, ticket: MediaCache.shared.ticket())
         }
-        playbackCatalog = PlaybackCatalog(video: video, client: client, scope: context.id)
+        // The Episodes menu's short labels (#318): kept from the episode before on the same video, else worked out off the
+        // main thread.
+        let kept = playbackCatalog.flatMap { $0.video == video ? $0.labels : nil }
+        playbackCatalog = PlaybackCatalog(video: video, client: client, scope: context.id, labels: kept ?? [:])
+        guard kept == nil else { return }
+        let episodes = video.episodes
+        Task { [weak self] in
+            let labels = await Task.detached(priority: .utility) { EpisodeLabels.labels(episodes) }.value
+            // Still this video, though maybe the next episode by now.
+            guard let self, !labels.isEmpty, self.playbackCatalog?.video == video else { return }
+            self.playbackCatalog?.labels = labels
+        }
     }
 
     /// The next episode's stream, resolved ahead so the player can queue it behind this one; nil when
@@ -779,6 +917,8 @@ struct PlaybackCatalog {
     let video: Video
     let client: CatalogClient
     let scope: String
+    /// Short labels (第1集) for lines whose episode names are file names, by episode id.
+    var labels: [Episode.ID: String] = [:]
     var playlist: EpisodePlaylist { EpisodePlaylist(video.episodes) }
 }
 

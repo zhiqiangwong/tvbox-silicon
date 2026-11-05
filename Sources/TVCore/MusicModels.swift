@@ -4,12 +4,15 @@ import Foundation
 public enum MusicPlatform: String, Codable, Sendable, CaseIterable, Hashable {
     // Merging takes catalogs in this order: QQ's entries carry durations and covers the others join.
     case qq, netease, migu, kuwo
+    /// Songs, albums and playlists from the music extensions the listener imported (MusicExtensions.swift).
+    case ext
     public var name: String {
         switch self {
         case .qq: L10n.text("QQ Music")
         case .netease: L10n.text("NetEase Cloud Music")
         case .migu: L10n.text("Migu Music")
         case .kuwo: L10n.text("Kuwo Music")
+        case .ext: L10n.text("Music Extensions")
         }
     }
 }
@@ -50,6 +53,8 @@ public struct MusicTrack: Identifiable, Hashable, Codable, Sendable {
     public var ids: [MusicPlatform: String]
     /// Why entries from different catalogs were taken as one recording, for diagnostics.
     public var evidence: [String]
+    /// Set for an episode of a TVBox source (an audiobook's chapter, #289): it plays from the source, not a catalog.
+    public var source: MusicSourceEpisode?
 
     public init(platform: MusicPlatform, songID: String, title: String, artists: [String], album: String? = nil,
                 duration: Double? = nil, artwork: URL? = nil) {
@@ -142,6 +147,10 @@ public struct MusicProbeResult: Hashable, Codable, Sendable {
 /// A service that turns a catalog song ID into a temporary audio address.
 public enum MusicProviderID: String, Codable, Sendable, Hashable, CaseIterable {
     case vkeys, gdstudio, hyw, migu, nianxin, xinghai
+    /// What a music extension's `getSongInfo` gives for its own songs.
+    case `extension`
+    /// The LX Music sources the listener imported (MusicLXSources.swift).
+    case lx
     public var name: String {
         switch self {
         case .vkeys: "VKeys"
@@ -150,6 +159,8 @@ public enum MusicProviderID: String, Codable, Sendable, Hashable, CaseIterable {
         case .migu: L10n.text("Migu")
         case .nianxin: L10n.text("Nianxin")
         case .xinghai: L10n.text("Xinghai")
+        case .extension: L10n.text("Extension")
+        case .lx: L10n.text("LX Music Sources")
         }
     }
     /// Services this provider is known to call itself, so a fallback never repeats a failed one.
@@ -161,6 +172,8 @@ public enum MusicProviderID: String, Codable, Sendable, Hashable, CaseIterable {
         case .migu: ["migu"]
         case .nianxin: ["nianxin"]
         case .xinghai: ["xinghai"]
+        case .extension: ["extension"]
+        case .lx: ["lx"]
         }
     }
 }
@@ -197,16 +210,40 @@ public struct ResolvedMusicStream: Hashable, Sendable {
     }
 }
 
+/// What a channel is asked for: its lossless audio, or lossy audio at 320 or 128 kbps, which
+/// costs far less data to stream.
+public enum MusicAudioQuality: String, Codable, Sendable, Equatable {
+    case lossless
+    case high
+    case standard
+}
+
 public enum MusicQualityPreference: String, Codable, Sendable, CaseIterable {
     /// Lossless when any channel has it within the budget, otherwise the best lossy stream, marked.
     case losslessPreferred
     case losslessOnly
+    /// 320 kbps audio, lossy.
+    case high
+    /// 128 kbps audio, lossy and the lightest on data.
+    case standard
     public var name: String {
         switch self {
         case .losslessPreferred: L10n.text("Lossless first")
         case .losslessOnly: L10n.text("Lossless only")
+        case .high: L10n.text("High (320 kbps)")
+        case .standard: L10n.text("Standard (128 kbps)")
         }
     }
+    /// The tier every channel is asked for.
+    public var requested: MusicAudioQuality {
+        switch self {
+        case .losslessPreferred, .losslessOnly: .lossless
+        case .high: .high
+        case .standard: .standard
+        }
+    }
+    /// Whether the viewer asked for lossless; the lossy choices play it only as a last resort.
+    public var wantsLossless: Bool { requested == .lossless }
 }
 
 /// One channel tried for a track, and how it went; the player's channel list shows these.

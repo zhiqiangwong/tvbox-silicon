@@ -10,8 +10,8 @@ options:
 settings:
   base:
     SWIFT_VERSION: '6.0'
-    MARKETING_VERSION: '1.8.6'
-    CURRENT_PROJECT_VERSION: '44'
+    MARKETING_VERSION: '1.8.10'
+    CURRENT_PROJECT_VERSION: '48'
     GENERATE_INFOPLIST_FILE: YES
     INFOPLIST_KEY_CFBundleDisplayName: Yingxia
     INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.entertainment
@@ -155,6 +155,16 @@ targets:
         UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         # Save Code to Photos, where a sign-in code can be scanned by the app on the same phone.
         NSPhotoLibraryAddUsageDescription: Saves a sign-in code to Photos, so the app on this phone can scan it.
+        # Downloads keep going in the background as continued-processing tasks (iOS 26, App/DownloadsView.swift).
+        BGTaskSchedulerPermittedIdentifiers: [$(PRODUCT_BUNDLE_IDENTIFIER).downloads.*]
+        # The video plays on a connected display (App/ExternalDisplay.swift). iOS 27 also needs the scene
+        # accessory the player screen registers; earlier systems offer the scene from this role alone.
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+          UISceneConfigurations:
+            UIWindowSceneSessionRoleExternalDisplayNonInteractive:
+              - UISceneConfigurationName: External Display
+                UISceneDelegateClassName: ExternalDisplaySceneDelegate
         # yingxia://douyin-login, the code an Apple TV shows to receive the Douyin sign-in.
         CFBundleURLTypes:
           - CFBundleURLName: com.tvbox.yingxia.handoff

@@ -23,11 +23,18 @@ struct GlobalSearchView: View {
     @AppStorage("searchShowsActivity") private var showsActivity = false
     /// Whether the end of the results is on screen, so finished pages can ask for the next.
     @State private var endVisible = false
+    #if !os(tvOS)
+    /// Results as rows of a small cover beside the whole title, instead of the poster grid: long or similar titles
+    /// are cut to one line under a poster (#426).
+    @AppStorage("searchResultsAsList") private var showsList = false
+    #endif
     @AppStorage("videoSearchHistory") private var historyData = Data()
     #if os(tvOS)
     /// Titles iQiyi suggests for the draft, and 360kan's chart for an empty field (`SearchSuggestions`).
     @State private var suggested: [String] = []
     @State private var trending: [String] = []
+    /// The keyboard's own screen, opened from the search field.
+    @State private var entering = false
     #endif
     private var model: SearchModel { store.searchModel }
     private var history: [String] { (try? JSONDecoder().decode([String].self, from: historyData)) ?? [] }
@@ -43,7 +50,7 @@ struct GlobalSearchView: View {
     /// Built-in sources can be selected while their first search is still in flight. One the viewer
     /// hid, or one paused for failing, isn't asked and gets no chip.
     private var sourceItems: [SearchSourceItem] {
-        let builtins = (store.subscription?.sites ?? Site.builtInSites).filter(\.isBuiltIn).filter { site in
+        let builtins = (store.subscription?.sites ?? []).filter(\.isBuiltIn).filter { site in
             model.total > 0 && (model.results.contains { $0.site.key == site.key } ||
                 (model.busy && model.asking.contains(site.key)))
         }.map { site in
@@ -60,21 +67,19 @@ struct GlobalSearchView: View {
         @AppBindable var model = model
         #if os(tvOS)
         searchResults
-            .searchable(text: $model.draft, prompt: Text(L10n.text("Search videos")))
-            .searchSuggestions {
-                // Past searches first, then titles for what is typed: a remote spells "xyj" and picks 西游记, as on
-                // FongMi's TV search. A completion only fills the field; the Search button below still starts the search.
-                let past = Array(history.filter { model.draft.isEmpty || $0.localizedCaseInsensitiveContains(model.draft) }.prefix(6))
-                ForEach(past + (model.draft.isEmpty ? trending : suggested).filter { !past.contains($0) }, id: \.self) { query in
-                    Text(query).searchCompletion(query)
-                }
-            }
-            .task(id: model.draft) { await suggest(model.draft) }
-            .onSubmit(of: .search) { if let config = store.subscription { submit(config) } }
+            // A field beside the sidebar button rather than the system keyboard across the top of the page, so the
+            // results get the screen (#415). Selecting it opens the keyboard on a screen of its own.
+            .modifier(BesideSidebarButton(title: AppSection.search.title) { searchField })
             .screenBackdrop()
+            .fullScreenCover(isPresented: $entering) { searchEntry }
             .sheet(isPresented: $showFailures) { AppPerceptionTracking { failureDetails } }
             .onAppear { if let config = store.subscription { model.resumeSuspended(config: config) } }
-            .onDisappear { endVisible = false; model.suspend() }
+            // The keyboard's screen covers the page without leaving it, so a running search goes on under it.
+            .onDisappear { if !entering { endVisible = false; model.suspend() } }
+            #if DEBUG
+            // Yingxia's own sources arrive after the subscription and rebuild it, which clears the search.
+            .task(id: store.subscription?.sites.count) { qaSearch() }
+            #endif
         #else
         searchResults
             .scrollPositionCompat(id: $model.scrollID)
@@ -105,15 +110,20 @@ struct GlobalSearchView: View {
             }
             .onDisappear { endVisible = false; model.suspend() }
             #if DEBUG
-            // `-qaSection search -qaQuery <text>` searches once the subscription has loaded, for screenshots.
-            .task(id: store.subscription?.origin) {
-                guard QALaunch.section == .search, model.keyword.isEmpty, let config = store.subscription,
-                      let text = UserDefaults.standard.string(forKey: "qaQuery") else { return }
-                model.draft = text; submit(config)
-            }
+            .task(id: store.subscription?.origin) { qaSearch() }
             #endif
         #endif
     } }
+
+    #if DEBUG
+    /// `-qaSection search -qaQuery <text>` searches once the subscription has loaded, for screenshots and UI tests.
+    private func qaSearch() {
+        guard QALaunch.section == .search, model.keyword.isEmpty, let config = store.subscription,
+              let text = UserDefaults.standard.string(forKey: "qaQuery") else { return }
+        model.draft = text; submit(config)
+    }
+    #endif
+
     /// The search field is the system's, so the bar below it waits for a search.
     private var showsHeader: Bool { !model.keyword.isEmpty }
 
@@ -121,20 +131,20 @@ struct GlobalSearchView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 #if os(tvOS)
-                // Editing, dictation and search completions only update the draft. The remote
-                // needs an explicit, focusable submit action before starting expensive plugins.
-                if let config = store.subscription {
-                    let query = model.draft.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !query.isEmpty, query != model.keyword {
-                        SearchQueryButton(query: query) { submit(config) }.accessibilityIdentifier("search.submit")
-                    }
-                    if !model.keyword.isEmpty {
-                        searchHeader(config).padding(.horizontal, -Layout.gutter)
-                    }
+                if let config = store.subscription, !model.keyword.isEmpty {
+                    searchHeader(config).padding(.horizontal, -Layout.gutter)
                 }
                 #endif
                 if let config = store.subscription {
-                    if model.keyword.isEmpty { idle.frame(maxWidth: 760, alignment: .leading).frame(maxWidth: .infinity) }
+                    if model.keyword.isEmpty {
+                        #if os(tvOS)
+                        // Recent searches are on the keyboard's screen, with the suggestions.
+                        Text(L10n.text("Search all available sources in your subscription.")).font(.body).foregroundStyle(.secondary)
+                            .frame(maxWidth: 760, alignment: .leading).frame(maxWidth: .infinity)
+                        #else
+                        idle.frame(maxWidth: 760, alignment: .leading).frame(maxWidth: .infinity)
+                        #endif
+                    }
                     else {
                         if model.total == 0 {
                             EmptyResults(symbol: "magnifyingglass", title: L10n.text("No searchable sources are available on this device."))
@@ -150,7 +160,8 @@ struct GlobalSearchView: View {
                             }
                         } else {
                             let currentPosters = posters
-                            LazyVGrid(columns: Layout.posterColumns, spacing: Layout.gridRowSpacing) {
+                            LazyVGrid(columns: listed ? Self.rowColumns : Layout.posterColumns,
+                                      spacing: listed ? Layout.gridSpacing : Layout.gridRowSpacing) {
                                 resultLinks(config, posters: currentPosters)
                             }.scrollTargetLayoutCompat()
                             // Scrolling the end into view asks for the next page; while it stays in view each new page asks again.
@@ -195,6 +206,58 @@ struct GlobalSearchView: View {
         }
         .frame(maxWidth: .infinity, minHeight: 420)
     }
+
+    #if os(tvOS)
+    /// Drawn as a text field showing the draft; selecting it opens `searchEntry`.
+    private var searchField: some View {
+        Button { entering = true } label: {
+            Label {
+                Text(model.draft.isEmpty ? L10n.text("Search videos") : model.draft)
+                    .lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+                    .opacity(model.draft.isEmpty ? 0.6 : 1)
+            } icon: { Image(systemName: "magnifyingglass") }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        // Keeps its size on focus (it turns white): grown, the full-width field covered the sidebar button.
+        .glassPill(lift: 1)
+        .accessibilityLabel(L10n.text("Search videos"))
+        .accessibilityValue(model.draft)
+        .accessibilityIdentifier("search.field")
+    }
+
+    /// The system search keyboard, full screen: past searches and suggested titles under it, then the button that
+    /// runs the search and closes it. Back closes it without searching.
+    private var searchEntry: some View {
+        @Bindable var model = model
+        return NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    // Editing, dictation and search completions only update the draft. The remote
+                    // needs an explicit, focusable submit action before starting expensive plugins.
+                    if let config = store.subscription {
+                        let query = model.draft.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !query.isEmpty, query != model.keyword {
+                            SearchQueryButton(query: query) { submit(config) }.accessibilityIdentifier("search.submit")
+                        }
+                    }
+                    idle.frame(maxWidth: 760, alignment: .leading).frame(maxWidth: .infinity)
+                }.pageContainer()
+            }
+            .searchable(text: $model.draft, prompt: Text(L10n.text("Search videos")))
+            .searchSuggestions {
+                // Past searches first, then titles for what is typed: a remote spells "xyj" and picks 西游记, as on
+                // FongMi's TV search. A completion only fills the field; the Search button below still starts the search.
+                let past = Array(history.filter { model.draft.isEmpty || $0.localizedCaseInsensitiveContains(model.draft) }.prefix(6))
+                ForEach(past + (model.draft.isEmpty ? trending : suggested).filter { !past.contains($0) }, id: \.self) { query in
+                    Text(query).searchCompletion(query)
+                }
+            }
+            .task(id: model.draft) { await suggest(model.draft) }
+            .onSubmit(of: .search) { if let config = store.subscription { submit(config) } }
+            .screenBackdrop()
+        }
+    }
+    #endif
 
     private func searchHeader(_ config: Subscription) -> some View {
         @AppBindable var model = model
@@ -292,6 +355,19 @@ struct GlobalSearchView: View {
     }
 
     @ViewBuilder private func searchActionButtons(_ config: Subscription) -> some View {
+        #if !os(tvOS)
+        // Shows what it switches to; the symbol morphs into the other one as the results rearrange.
+        let layoutTitle = L10n.text(showsList ? "Show as Grid" : "Show as List")
+        Button { withAnimation(.smooth(duration: 0.35)) { showsList.toggle() } } label: {
+            Image(systemName: showsList ? "square.grid.2x2" : "list.bullet")
+                .font(.footnote.weight(.semibold))
+                .symbolReplaceTransition()
+                .frame(minWidth: 16)
+        }
+        .searchAction()
+        .accessibilityLabel(layoutTitle).help(layoutTitle)
+        .accessibilityIdentifier("search.layout")
+        #endif
         if model.busy {
             Button { model.stop() } label: { searchActionLabel(L10n.text("Stop"), symbol: "stop.fill") }.searchAction()
             let title = L10n.text(showsActivity ? "Hide Details" : "Show Details")
@@ -320,9 +396,51 @@ struct GlobalSearchView: View {
             RouteLink {
                 CatalogDestination(video: item.video, client: CatalogClient(site: item.site, origin: config.origin, jarURL: config.spiderURL))
                     .onAppear { rememberQuery() }
-            } label: { searchPoster(item) }
+            } label: {
+                if listed { searchRow(item) } else { searchPoster(item) }
+            }
             .cardButton().id(item.id)
         }
+    }
+
+    private var listed: Bool {
+        #if os(tvOS)
+        false
+        #else
+        showsList
+        #endif
+    }
+
+    /// Rows side by side where they fit: one column on a phone, two or three on an iPad or a Mac window.
+    private static let rowColumns = [GridItem(.adaptive(minimum: 320), spacing: Layout.gridSpacing, alignment: .top)]
+
+    /// A small cover beside the whole title (up to three lines), what the source says of it, and the source.
+    private func searchRow(_ item: SearchPoster) -> some View {
+        let video = item.video
+        let detail = [video.year, video.category?.split(separator: ",").first.map(String.init)].compactMap { $0 }.joined(separator: " · ")
+        return HStack(alignment: .top, spacing: 12) {
+            Color.clear.frame(width: 64, height: 96)
+                .overlay { PosterImage(url: video.poster, headers: video.posterHeaders) }
+                .posterClip(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            VStack(alignment: .leading, spacing: 4) {
+                Text(video.name).font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
+                    .lineLimit(3).multilineTextAlignment(.leading)
+                if !video.remarks.isEmpty {
+                    Text(video.remarks).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                }
+                if !detail.isEmpty {
+                    Text(detail).font(.caption).foregroundStyle(.tertiary).lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                Text(SourceLabel(item.site.name).text).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity, minHeight: 112, alignment: .leading)
+        // A plain fill, not glass: a long list of results would otherwise draw a glass layer per row.
+        .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     private func searchPoster(_ item: SearchPoster) -> some View {
@@ -496,6 +614,9 @@ struct GlobalSearchView: View {
         guard !keyword.isEmpty else { return }
         rememberQuery(keyword)
         inputFocused = false
+        #if os(tvOS)
+        entering = false
+        #endif
         model.search(keyword, config: config) { [store] site in
             store.hiddenSources.contains(site, origin: config.origin)
         }
@@ -518,8 +639,12 @@ private struct SearchActivityList: View {
             let active = Array(PluginPreparation.active(origin: origin).prefix(limit))
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 14) {
+                    #if os(tvOS)
+                    SearchProgressBar(fraction: Double(completed) / Double(max(total, 1)))
+                    #else
                     ProgressView(value: Double(completed), total: Double(max(total, 1)))
                         .progressViewStyle(.linear).tint(Brand.accent)
+                    #endif
                     if let remaining = remaining(at: timeline.date) {
                         Text(remaining).foregroundStyle(.secondary).monospacedDigit().fixedSize()
                     }
@@ -571,6 +696,57 @@ private struct SearchActivityList: View {
     }
 }
 
+#if os(tvOS)
+/// Puts `field` in the row of the collapsed sidebar's button, just after it. The system draws that button (the section's
+/// symbol and name) at the top left and gives no way to add to its row, so a hidden copy of the name, at the button's
+/// font and insets as tvOS 27 draws it, takes its width. tvOS 17 has the tab bar along the top instead: the field
+/// goes in the navigation bar under it.
+private struct BesideSidebarButton<Field: View>: ViewModifier {
+    let title: String
+    @ViewBuilder let field: Field
+    func body(content: Content) -> some View {
+        if #available(tvOS 18, *) {
+            content.overlay(alignment: .topLeading) {
+                HStack(spacing: 32) {
+                    Text(title).font(.system(size: 31, weight: .medium)).lineLimit(1).fixedSize()
+                        .padding(.leading, 83).hidden().accessibilityHidden(true)
+                    field.frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(height: 58)
+                // Out to the right edge of the results, so pressing up from anywhere on the page reaches it (as a
+                // section, the whole row takes the move): a 560-point field left most of the results with nothing above.
+                // The page sits inside the 80-point side safe area, which this overlay ignores, so it ends where the results do.
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .focusSection()
+                .padding(.leading, 50).padding(.trailing, Layout.gutter + max(80, (1920 - Layout.maxWidth) / 2)).padding(.top, 51)
+                .ignoresSafeArea()
+            }
+        } else {
+            content.toolbar { ToolbarItem(placement: .topBarLeading) { field } }
+        }
+    }
+}
+
+/// The search's progress, drawn rather than a linear `ProgressView`. On tvOS that is a UIProgressView, and setting
+/// its progress makes UIKit's accessibility ask SwiftUI for the focused element in the middle of a view update.
+/// With the remote moving through the results as sources answer, AttributeGraph then loops on the cycle with the
+/// main thread at 100%, and the app freezes until it is quit (#325).
+private struct SearchProgressBar: View {
+    let fraction: Double
+    var body: some View {
+        Capsule().fill(Color.primary.opacity(0.2))
+            .overlay(alignment: .leading) {
+                GeometryReader { proxy in
+                    Capsule().fill(Brand.accent).frame(width: proxy.size.width * min(1, max(0, fraction)))
+                }
+            }
+            .frame(height: 6)
+            .accessibilityElement()
+            .accessibilityValue(Text(fraction, format: .percent.precision(.fractionLength(0))))
+    }
+}
+#endif
+
 #if !os(tvOS)
 private struct QuietPillStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
@@ -620,6 +796,8 @@ struct RecommendationsView: View {
     /// The source category shown instead of its recommendations; nil shows the recommendations.
     @State private var category: String?
     @State private var categoryPage = 1
+    /// The open category's filter choices (key to value), set with `category`.
+    @State private var categoryFilters: [String: String] = [:]
     /// The source `category` belongs to. A source change clears it inside the load task, which is the last writer.
     @State private var categorySite: String?
     @State private var browser = CatalogBrowser()
@@ -834,6 +1012,9 @@ struct RecommendationsView: View {
             if let loadedSite = model.site, !model.categories.isEmpty {
                 categoryChips(loadedSite).tvFocusSection()
             }
+            if let category, let current = model.categories.first(where: { $0.id == category }), !current.filters.isEmpty {
+                CategoryFilterBar(filters: current.filters, choices: categoryFilters) { categoryFilters = $0; categoryPage = 1 }.tvFocusSection()
+            }
             if category != nil, let loadedSite = model.site {
                 categoryContent(loadedSite)
             } else if !model.busy && model.error == nil && model.items.isEmpty {
@@ -886,13 +1067,13 @@ struct RecommendationsView: View {
             guard !Task.isCancelled, site.key == requested else { return }
             // A source whose home names only categories (list sites) opens its first one.
             if category == nil, !model.busy, model.error == nil, model.items.isEmpty, let first = model.categories.first {
-                category = first.id; categoryPage = 1
+                category = first.id; categoryPage = 1; categoryFilters = CategoryFilter.initialChoices(first.filters)
             }
         }
-        .task(id: "\(requestID)|\(category ?? "")|\(categoryPage)") {
+        .task(id: "\(requestID)|\(category ?? "")|\(categoryPage)|" + categoryFilters.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: "&")) {
             // The rows load their own categories.
             guard !rails, let category, let loadedSite = model.site, loadedSite.key == site?.key else { return }
-            await browser.load(.list(category: category, query: "", page: categoryPage),
+            await browser.load(.list(category: category, query: "", page: categoryPage, filters: categoryFilters),
                                client: CatalogClient(site: loadedSite, origin: config.origin, jarURL: config.spiderURL))
         }
         .onDisappear { browser.cancel() }
@@ -1048,7 +1229,9 @@ struct RecommendationsView: View {
                     Chip(title: L10n.text("Recommendations"), selected: category == nil) { category = nil; categoryPage = 1 }
                 }
                 ForEach(model.categories) { item in
-                    Chip(title: item.name, selected: category == item.id) { category = item.id; categoryPage = 1 }
+                    Chip(title: item.name, selected: category == item.id) {
+                        category = item.id; categoryPage = 1; categoryFilters = CategoryFilter.initialChoices(item.filters)
+                    }
                 }
             }.padding(.vertical, 4)
         }
@@ -1322,7 +1505,7 @@ private struct SourceChip: View {
         // The chip under the pointer receives the mouse-up that ends a drag.
         Button { if drag?.active != true { action() } } label: {
             HStack(spacing: 6) {
-                if name == Site.bilibili.name { BilibiliGlyph(size: 15).foregroundStyle(selected ? Brand.onAccent : BilibiliMark.blue) } else if let symbol = label.symbol { Text(symbol) }
+                if name == CloudSources.site(where: \.isBilibili)?.name { BilibiliGlyph(size: 15).foregroundStyle(selected ? Brand.onAccent : BilibiliMark.blue) } else if let symbol = label.symbol { Text(symbol) }
                 Text(label.title).lineLimit(1)
                 if let count { Text("\(count)").monospacedDigit().opacity(0.55) }
                 if let dot { Image(systemName: "circle.fill").font(.system(size: 7)).foregroundStyle(dot) }

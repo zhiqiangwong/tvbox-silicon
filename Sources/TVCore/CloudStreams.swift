@@ -168,6 +168,8 @@ actor CloudByteStream {
     /// How far ahead of the bytes AVPlayer is reading the stream fetches on its own.
     static let readAhead = 8
     static let cacheChunks = 24
+    /// Chunks fetched without a refusal before a stream a drive held to fewer connections tries one more.
+    static let probeAfter = 64
 
     nonisolated let counter = CloudCounter()
     nonisolated let host: String?
@@ -179,7 +181,8 @@ actor CloudByteStream {
     private var recent: [Int] = []
     private var inflight: [Int: Task<Data, Error>] = [:]
     /// Where AVPlayer is reading. A file whose audio sits far from its video is read in two
-    /// places at once; a jump away from all of them is a seek.
+    /// places at once; a jump away from all of them is a seek. On the iPhone AVPlayer also reads one
+    /// place on two overlapping requests, the newer starting a few chunks behind the older (issue #433).
     private var readers: [Int] = []
     /// How many reads wait on each chunk; a seek never cancels a chunk someone still needs.
     private var waiting: [Int: Int] = [:]
@@ -195,8 +198,12 @@ actor CloudByteStream {
     }()
 
     private let session: URLSession
-    /// Connections reading ahead at once, `parallel` unless the source needs fewer.
-    private let connections: Int
+    /// Connections reading ahead at once: `parallel` unless the source needs fewer, or the drive refused more.
+    private var connections: Int
+    private let mostConnections: Int
+    /// Whether the current address has sent bytes. A refusal after that is the drive capping connections, not a dead link.
+    private var served = false
+    private var sinceRefusal = 0
     /// Whether `playableSampleEntries` retags the bytes: for AVPlayer's own MP4 reading, not for `Remux`.
     private var rewritesSampleEntries: Bool
 
@@ -204,6 +211,7 @@ actor CloudByteStream {
          rewritesSampleEntries: Bool = true, refresh: @escaping @Sendable () async -> CloudStreams.Source?) {
         self.source = source; self.session = session; self.refresh = refresh; host = source.url.host()
         connections = max(1, parallel)
+        mostConnections = connections
         self.rewritesSampleEntries = rewritesSampleEntries
         sourceLength = source.length
     }
@@ -234,15 +242,15 @@ actor CloudByteStream {
     func read(at offset: Int, count: Int) async throws -> Data {
         guard offset >= 0, offset < source.length, count > 0 else { throw TVError.unsupported("Invalid range") }
         let index = offset / Self.chunkSize
-        let near = { (reader: Int) in index >= reader - 1 && index <= reader + Self.readAhead + 1 }
-        if let current = readers.firstIndex(where: near) { readers[current] = index }
+        let near = { (reader: Int) in index >= reader - Self.readAhead && index <= reader + Self.readAhead + 1 }
+        if let current = readers.firstIndex(where: near) { readers[current] = max(readers[current], index) }
         else {
             if !readers.isEmpty { Diagnostics.shared.record(.debug, "cloud.stream", "reader at=\(index) others=\(readers)") }
             readers.append(index)
             // Keep the two most recent positions (video and audio); a third means the user seeked.
             if readers.count > 2 {
                 readers.removeFirst(readers.count - 2)
-                let windows = readers.map { $0 - 1...$0 + Self.readAhead }
+                let windows = readers.map { $0 - Self.readAhead...$0 + Self.readAhead }
                 for (key, task) in inflight where waiting[key, default: 0] == 0 && !windows.contains(where: { $0.contains(key) }) {
                     task.cancel(); inflight[key] = nil
                 }
@@ -281,9 +289,10 @@ actor CloudByteStream {
     }
 
     private func download(_ index: Int) async throws -> Data {
-        defer { inflight[index] = nil }
+        // A cancelled download was already let go, and the chunk may be on its way again in another.
+        defer { if !Task.isCancelled { inflight[index] = nil } }
         let first = index * Self.chunkSize, last = min(source.length, first + Self.chunkSize) - 1
-        var attempt = 0, cut = 0
+        var attempt = 0, cut = 0, refusals = 0
         var received = Data()
         while true {
             try Task.checkCancellation()
@@ -298,6 +307,14 @@ actor CloudByteStream {
                 let status = (response as? HTTPURLResponse)?.statusCode ?? 0
                 // The signed address expired, or the drive wants a fresh session: resolve once more.
                 if [401, 403, 404, 410].contains(status), attempt <= 2, await renew() { continue }
+                // 115 answers 403 to connections past a few at once on a link it is serving (issue #312). Failing the
+                // read made FFmpeg lose its place in the file: read on fewer connections and ask again.
+                if [403, 429, 503].contains(status), served, refusals < 6 {
+                    refusals += 1
+                    refused(index, status: status, body: data)
+                    try await Task.sleep(for: .milliseconds(250 * refusals))
+                    continue
+                }
                 let range = (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Range")?.firstMatch(of: /^bytes (\d+)-(\d+)\/(\d+)$/)
                 let end = range.flatMap { Int($0.2) }
                 guard status == 206, let range, Int(range.1) == from, let end, end <= last, !data.isEmpty, data.count == end - from + 1 else {
@@ -314,12 +331,17 @@ actor CloudByteStream {
                 counter.add(data.count)
                 rate.bytes += data.count
                 received.append(data)
+                served = true
                 // A drive that sends part of the range at a time: ask for the rest.
                 if end < last { attempt = 0; continue }
                 if Date().timeIntervalSince(rate.since) >= 10 {
                     let seconds = Date().timeIntervalSince(rate.since)
                     Diagnostics.shared.record(.debug, "cloud.stream", "rate bytesPerSecond=\(Int(Double(rate.bytes) / seconds)) readers=\(readers) inflight=\(inflight.count)")
                     rate = (Date(), 0)
+                }
+                if connections < mostConnections {
+                    sinceRefusal += 1
+                    if sinceRefusal >= Self.probeAfter { connections += 1; sinceRefusal = 0 }
                 }
                 let playable = rewritesSampleEntries ? CloudStreams.playableSampleEntries(received) : received
                 cache[index] = playable
@@ -333,6 +355,14 @@ actor CloudByteStream {
         }
     }
 
+    /// The drive refused chunk `index` while others were being read: read ahead on no more than those.
+    private func refused(_ index: Int, status: Int, body: Data) {
+        connections = max(1, min(connections - 1, inflight.count - 1))
+        sinceRefusal = 0
+        let text = String(decoding: body.prefix(120), as: UTF8.self).replacingOccurrences(of: "\n", with: " ")
+        Diagnostics.shared.record(.debug, "cloud.stream", "chunk=\(index) refused status=\(status) body=\(text) connections=\(connections); again")
+    }
+
     private func renew() async -> Bool {
         // Chunks refused together share one refresh, and its outcome: one that failed isn't retried at once.
         if let lastRefresh, Date().timeIntervalSince(lastRefresh.date) < 10 { return lastRefresh.renewed }
@@ -343,6 +373,7 @@ actor CloudByteStream {
         }
         lastRefresh = (Date(), true)
         source = next
+        served = false
         Diagnostics.shared.record(.info, "cloud.stream", "refreshed host=\(next.url.host() ?? "-")")
         return true
     }

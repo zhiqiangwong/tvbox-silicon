@@ -79,7 +79,7 @@ import TVCore
     /// Bullet comments for the media, when its source has them.
     private var sourceDanmaku: [Danmaku] = []
     var danmaku: [Danmaku] { sourceDanmaku.isEmpty ? catalogDanmaku.renderedComments : sourceDanmaku }
-    var danmakuOpacity: Double { sourceDanmaku.isEmpty ? catalogDanmaku.opacity : 0.9 }
+    var danmakuOpacity: Double { catalogDanmaku.opacity }
     var danmakuRevision: String { sourceDanmaku.isEmpty ? catalogDanmaku.renderedRevision : "" }
     var onPlaybackEnded: (() -> Void)?
     /// Plays another line of the same episode when this file can't play here (an MKV original);
@@ -116,6 +116,10 @@ import TVCore
     private var switchNotice: String?
     /// Qualities the stream can switch between (Bilibili), and the one chosen; nil is automatic.
     private(set) var qualities: [StreamQuality] = []
+    /// The sound tracks of a file that groups none of them (`UngroupedAudio`), for the player's Audio choice, and the
+    /// one playing. Empty when AVFoundation offers the choice itself, or there is none.
+    private(set) var audioChoices: [UngroupedAudio.Choice] = []
+    private(set) var audioChoice: CMPersistentTrackID?
     /// A live stream: played at the live edge, without scrubbing.
     private(set) var isLive = false
     /// The item is ready and has a finite duration, so there is a timeline to scrub. A live stream that
@@ -137,6 +141,9 @@ import TVCore
     private var rangeRetried = false
     /// When the loopback server behind the episode last listened again (`recoverLoopback`).
     private var loopbackRecovered: ContinuousClock.Instant?
+    /// How often the episode opened again after its connection dropped (`resumeAfterDrop`), and whether it did yet.
+    private var dropRecovery = PlaybackDropRecovery()
+    private var reopenedAfterDrop = false
     /// Whether AVPlayer shows the picture of the file it just opened is being checked; the saved position waits.
     private var checkingPicture = false
     /// The item whose HLS stream is being watched for sound without a picture (`checkSegmentedPicture`).
@@ -217,6 +224,13 @@ import TVCore
                 if self.sourceDanmaku.count > 4000 { self.sourceDanmaku.removeFirst(1000) }
             }
         }
+    }
+
+    /// Plays the sound track `id` of a file whose tracks AVFoundation offers no choice between (`audioChoices`).
+    func chooseAudio(_ id: CMPersistentTrackID) {
+        guard let item else { return }
+        UngroupedAudio.play(id, in: item)
+        audioChoice = UngroupedAudio.playing(item)
     }
 
     /// Plays the stream at `quality` (nil: automatic) from where it is now.
@@ -317,6 +331,28 @@ import TVCore
         return true
     }
 
+    /// An on-demand episode whose connection dropped or stalled (NSURL -1005, or Core Media -15628 after "No response
+    /// for media file") stops there: AVPlayer doesn't ask again by itself. It opens again where it was, a few times and
+    /// a little later each time (`PlaybackDropRecovery`), and so does a reopening that can't connect yet. Live streams
+    /// and saved downloads don't, and the error shows once the attempts are used up.
+    private func resumeAfterDrop(_ failure: Error?, channel: Channel, url: URL, generation active: UUID) -> Bool {
+        guard !isLive, !savedDownload, !url.isFileURL, hasTimeline || reopenedAfterDrop else { return false }
+        let current = player.currentTime().seconds
+        let position = pendingResume ?? (current.isFinite ? current : 0)
+        guard let delay = dropRecovery.delay(after: failure, position: position) else { return false }
+        reopenedAfterDrop = true
+        detachItem(); observation = nil; loading = true
+        Diagnostics.shared.record(.warning, "player", "dropped host=\(transfer.host ?? url.host() ?? "-") at=\(Int(position))s attempt=\(dropRecovery.attempts) \(failure.map(Self.describe) ?? "-"); reopening")
+        note(L10n.text("The connection dropped. Reconnecting"))
+        preparation = Task { [weak self] in
+            try? await Task.sleep(for: delay)
+            guard let self, self.generation == active, !Task.isCancelled else { return }
+            if position > 1 { self.pendingResume = position }
+            self.configure(channel, url: url, generation: active)
+        }
+        return true
+    }
+
     /// The URL error code behind a failure, through its underlying errors.
     nonisolated static func urlErrorCode(_ error: Error?) -> Int? {
         var current = error as NSError?
@@ -332,7 +368,9 @@ import TVCore
     /// and so do the files opened after it. A mirrored or recorded screen refuses HDR the same way, but only
     /// while it lasts: then this file alone converts. Dolby Vision 5 can't convert, so it isn't tried again.
     private func retryHDR(after failure: Error?, channel: Channel, url: URL, generation active: UUID) -> Bool {
-        guard Remux.isHDR(url), !Remux.isDolbyVision(url), Self.refusedContent(failure) else { return false }
+        // A repackaged HLS stream's HDR variant is refused before any segment loads: -1002 or -12927 (#345).
+        let refused = Self.refusedContent(failure) || Remux.isSegmented(url) && Self.refusedVariant(failure)
+        guard Remux.isHDR(url), !Remux.isDolbyVision(url), refused else { return false }
         let captured = Self.screenCaptured
         guard captured ? !Remux.screenCaptured : !Remux.refusesHDR else { return false }
         if captured { Remux.screenCaptured = true } else { Remux.refusesHDR = true }
@@ -361,7 +399,7 @@ import TVCore
     }
 
     func setSpeed(_ speed: Float) {
-        boost = nil
+        clearBoost()
         player.defaultRate = speed
         if player.rate != 0 { player.rate = speed }
     }
@@ -369,12 +407,35 @@ import TVCore
     /// Another rate while the picture is held (`SpeedBoost`); nil plays at the chosen speed again. It never becomes
     /// the chosen speed, so the speed menu and a later play keep the one picked there. Pausing ends it.
     /// Up to 4× even where the item says it can't fast-forward: an HLS stream without I-frame playlists says so, yet
-    /// plays at 3× and 4× in full, as the menu's speeds do.
+    /// plays at 3× and 4× in full, as the menu's speeds do. A connection too slow for it holds it lower
+    /// (`SpeedBoost.Throttle`, issue #364); `boostWanted` is then the rate the hold asked for.
     private(set) var boost: Float?
+    private(set) var boostWanted: Float?
+    @PerceptionIgnored private var throttle: SpeedBoost.Throttle?
     func setBoost(_ rate: Float?) {
         guard rate == nil || !paused else { return }
-        boost = rate
+        throttle = rate.map { SpeedBoost.Throttle(wanted: Double($0), after: throttle) }
+        applyBoost()
+    }
+    private func applyBoost() {
+        boost = throttle.map { Float($0.rate) }
+        boostWanted = throttle.flatMap { $0.limited ? Float($0.wanted) : nil }
         if player.rate != 0 { player.rate = boost ?? player.defaultRate }
+    }
+    private func clearBoost() { throttle = nil; boost = nil; boostWanted = nil }
+    /// Once a second while a hold plays faster than normal: slower before the buffered video runs out, and faster
+    /// again while the download keeps up.
+    private func throttleBoost(_ item: AVPlayerItem) {
+        guard var throttle, throttle.wanted > 1, player.rate != 0, item.status == .readyToPlay else { return }
+        let now = player.currentTime()
+        let buffered = item.loadedTimeRanges.lazy.map(\.timeRangeValue).first { CMTimeRangeContainsTime($0, time: now) }
+        let ahead = buffered.map { CMTimeRangeGetEnd($0).seconds - now.seconds } ?? 0
+        throttle.update(ahead: ahead, waiting: player.timeControlStatus == .waitingToPlayAtSpecifiedRate)
+        let changed = throttle.rate != self.throttle?.rate
+        self.throttle = throttle
+        guard changed else { return }
+        Diagnostics.shared.record(.info, "player", "hold speed \(throttle.rate)x of \(throttle.wanted)x ahead=\(Int(ahead))s")
+        applyBoost()
     }
     private var generation = UUID()
     init() {
@@ -422,7 +483,7 @@ import TVCore
         begin(channel)
         isLive = LiveCatalog.isRoom(channel.url) || channel.group == L10n.text("Bilibili Live")
         liveRoom = LiveCatalog.isRoom(channel.url) ? channel : nil; liveRetried = false; liveRetrying = false; rangeRetried = false
-        loopbackRecovered = nil
+        loopbackRecovered = nil; dropRecovery = PlaybackDropRecovery(); reopenedAfterDrop = false
         ErrorReports.shared.playing(live: isLive, format: channel.url.pathExtension, source: channel.historyContext?.sourceKey,
                                     danmaku: UserDefaults.standard.object(forKey: DanmakuPreference.key) == nil || UserDefaults.standard.bool(forKey: DanmakuPreference.key),
                                     sharper: UserDefaults.standard.bool(forKey: VideoEnhancement.upscaleKey))
@@ -433,7 +494,7 @@ import TVCore
             // A live room becomes its current stream address now; the address expires.
             var channel = channel
             var liveQualities: [StreamQuality] = [], liveQuality: Int?
-            if let room = BilibiliLive.room(channel.url) { self.listen(room: room, generation: activeGeneration) }
+            if let (platform, id) = LiveCatalog.room(channel.url), platform.chat == "bilibili", let room = Int(id) { self.listen(room: room, generation: activeGeneration) }
             if LiveCatalog.isRoom(channel.url) {
                 self.note(L10n.text("Finding the live stream"))
                 do { (channel, liveQualities, liveQuality) = try await LiveCatalog.resolve(channel) }
@@ -470,7 +531,7 @@ import TVCore
             let address = prepared.url
             self.configure(channel, url: address, generation: activeGeneration)
             self.playing = channel; self.automatic = address
-            self.qualities = liveQualities.isEmpty ? BilibiliStreams.qualities(for: address) : liveQualities
+            self.qualities = liveQualities.isEmpty ? DashStreams.qualities(for: address) : liveQualities
             self.quality = liveQuality
             if DanmakuSource.has(channel.url), let comments = await DanmakuSource.comments(for: channel.url),
                self.generation == activeGeneration { self.sourceDanmaku = comments }
@@ -509,7 +570,7 @@ import TVCore
     private func makeItem(_ channel: Channel, url: URL) -> AVPlayerItem {
         // Some providers require request headers. AVURLAsset's HTTP-header option is
         // best-effort and is not a guarantee for every redirected HLS segment.
-        let asset = CloudStreams.asset(for: url) ?? HongguoStreams.asset(for: url) ?? BilibiliStreams.asset(for: url) ?? DouyuStreams.asset(for: url)
+        let asset = CloudStreams.asset(for: url) ?? HongguoStreams.asset(for: url) ?? DashStreams.asset(for: url) ?? LiveRepair.asset(for: url)
             ?? AVURLAsset(url: url, options: ["AVURLAssetHTTPHeaderFieldsKey": channel.headers])
         let item = AVPlayerItem(asset: asset)
         if url.scheme == HongguoStreams.scheme { item.preferredForwardBufferDuration = HongguoStreams.forwardBufferDuration }
@@ -581,7 +642,8 @@ import TVCore
 
     /// HLS whose MPEG-TS segments carry HEVC plays its sound alone: AVPlayer drops that picture without an error (#292).
     /// For the first seconds after an HLS stream is ready, an item that plays sound with no picture track opens again
-    /// repackaged (`HLSRemux`) where it was. A stream it can't repackage plays on as it is.
+    /// repackaged (`HLSRemux`) where it was. A stream it can't repackage plays on as it is. Only the tracks tell: such a
+    /// stream can still report a presentation size (1280x720 for a 4K channel whose master names its resolution, #394).
     private func checkSegmentedPicture(_ item: AVPlayerItem, channel: Channel, url: URL, generation active: UUID) {
         guard checkingSegments != ObjectIdentifier(item), !Remux.isRemuxed(url), ["http", "https"].contains(url.scheme) else { return }
         checkingSegments = ObjectIdentifier(item)
@@ -590,7 +652,7 @@ import TVCore
                 try? await Task.sleep(for: .milliseconds(500))
                 guard let self, self.generation == active, self.item === item, item.status == .readyToPlay else { return }
                 let kinds = item.tracks.compactMap { $0.assetTrack?.mediaType }
-                if kinds.contains(.video) || item.presentationSize != .zero { return }
+                if kinds.contains(.video) { return }
                 guard kinds.contains(.audio), self.player.timeControlStatus == .playing else { continue }
                 let playback = item.accessLog()?.events.last?.playbackType ?? ""
                 guard ["VOD", "LIVE"].contains(playback) || url.absoluteString.lowercased().contains("m3u8") else { return }
@@ -603,6 +665,7 @@ import TVCore
     private func repackageSegments(_ item: AVPlayerItem, channel: Channel, url: URL, generation active: UUID) {
         Diagnostics.shared.record(.warning, "player", "hls plays no picture; repackaging host=\(url.host() ?? "-")")
         note(L10n.text("Repackaging the video for this device"))
+        Remux.screenCaptured = Self.screenCaptured
         preparation = Task { [weak self] in
             var remuxed: URL?
             do { remuxed = try await HLSRemux.open(url, headers: channel.headers) }
@@ -612,7 +675,8 @@ import TVCore
                 return
             }
             let position = self.player.currentTime().seconds
-            if self.pendingResume == nil, position.isFinite, position > 1 { self.pendingResume = position }
+            // A live stream (no duration) has no place to return to: it opens again at its live edge.
+            if self.pendingResume == nil, item.duration.isNumeric, position.isFinite, position > 1 { self.pendingResume = position }
             self.loading = true
             self.detachItem(); self.observation = nil
             self.configure(channel, url: remuxed, generation: active)
@@ -623,6 +687,7 @@ import TVCore
     /// Follows the episode's item (ready, failed, ended), the player's state, and the transfer, for this playback.
     private func watch(_ item: AVPlayerItem, channel: Channel, url: URL, generation activeGeneration: UUID) {
         self.item = item
+        audioChoices = []; audioChoice = nil
         hasTimeline = item.status == .readyToPlay && item.duration.isNumeric
         observation = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
             let status = item.status
@@ -636,6 +701,13 @@ import TVCore
                 guard let self, self.generation == activeGeneration else { return }
                 self.hasTimeline = timeline
                 if status == .readyToPlay {
+                    if UngroupedAudio.playOne(item) { Diagnostics.shared.record(.info, "player", "ungrouped audio tracks; playing the first") }
+                    Task { [weak self] in
+                        let choices = await UngroupedAudio.choices(item)
+                        guard let self, self.generation == activeGeneration, self.item === item else { return }
+                        self.audioChoices = choices
+                        self.audioChoice = choices.isEmpty ? nil : UngroupedAudio.playing(item)
+                    }
                     self.checkingPicture = Self.repackagable(url)
                     self.restorePositionIfNeeded(item)
                     self.loading = self.pendingResume != nil || self.restoringPosition
@@ -653,6 +725,7 @@ import TVCore
                     if self.retryRange(after: failure, channel: channel, url: url, generation: activeGeneration) { return }
                     if self.retryHDR(after: failure, channel: channel, url: url, generation: activeGeneration) { return }
                     if self.recoverLoopback(Self.urlErrorCode(failure), channel: channel, url: url, generation: activeGeneration) { return }
+                    if self.reopenedAfterDrop, self.resumeAfterDrop(failure, channel: channel, url: url, generation: activeGeneration) { return }
                     Diagnostics.shared.record(.error, "player", "failed host=\(self.transfer.host ?? channel.url.host() ?? "-") \(self.transfer.failure.map { "upstream=\($0) " } ?? "")\(detail) \(self.failureContext(channel, url: url, item: item))")
                     if self.retryLive(after: failure) { return }
                     // A refused link is usually an expired one: say so in plain words rather than the system's.
@@ -671,6 +744,7 @@ import TVCore
             Task { @MainActor [weak self] in
                 guard let self, self.generation == activeGeneration else { return }
                 if self.recoverLoopback(Self.urlErrorCode(failure), channel: channel, url: url, generation: activeGeneration) { return }
+                if self.resumeAfterDrop(failure, channel: channel, url: url, generation: activeGeneration) { return }
                 Diagnostics.shared.record(.error, "player", "interrupted host=\(self.transfer.host ?? channel.url.host() ?? "-") at=\(Int(self.player.currentTime().seconds.isFinite ? self.player.currentTime().seconds : -1))s \(failure.map(Self.describe) ?? "-") \(self.failureContext(channel, url: url, item: item))")
                 if self.retryLive(after: failure) { return }
                 self.error = message ?? L10n.text("Playback was interrupted."); self.loading = false
@@ -696,7 +770,7 @@ import TVCore
                 guard let self, self.generation == activeGeneration else { return }
                 self.buffering = waiting
                 self.paused = paused
-                if paused { self.boost = nil }
+                if paused { self.clearBoost() }
                 // The first frame lands a beat after playback starts; keep the artwork until then, so no black flashes between.
                 if playing, !self.showsPicture {
                     Task { @MainActor [weak self] in
@@ -728,6 +802,7 @@ import TVCore
         guard let item, player.currentItem === item else { return true }
         restorePositionIfNeeded(item)
         updateSkipping(item)
+        throttleBoost(item)
         catchUpLive(item)
         queueUpcomingIfDue(item)
         if let url = playing?.url { HongguoStreams.updatePosition(for: url, seconds: pendingResume ?? player.currentTime().seconds) }
@@ -817,7 +892,7 @@ import TVCore
         #if os(macOS)
         return NSScreen.main?.maximumFramesPerSecond ?? 0
         #else
-        return (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.screen.maximumFramesPerSecond ?? 0
+        return UIApplication.shared.appWindowScene?.screen.maximumFramesPerSecond ?? 0
         #endif
     }
     #endif
@@ -837,7 +912,7 @@ import TVCore
         saveHistory()
         discardUpcoming()
         upcomingAttempted = false; skipsToUpcoming = false; advanced = nil
-        upcomingEpisode = nil; onAdvance = nil; playsOn = { false }; boost = nil
+        upcomingEpisode = nil; onAdvance = nil; playsOn = { false }; clearBoost()
         if let url = playing?.url { HongguoStreams.stop(url) }
         if let automatic { CloudStreams.stop(automatic); Remux.stop(automatic) }
         if playing != nil { ErrorReports.shared.stoppedPlaying() }
@@ -1112,9 +1187,13 @@ extension PlaybackSession {
                     if status == .failed {
                         Diagnostics.shared.record(.warning, "player", "upcoming failed \(failure.map(Self.describe) ?? "-")")
                         self.discardUpcoming()
-                    } else if status == .readyToPlay, let intro, intro.enabled, intro.introEnd > 0,
-                              intro.validationError(duration: queued.duration.seconds) == nil, queued.currentTime().seconds < intro.introEnd {
-                        queued.seek(to: CMTime(seconds: intro.introEnd, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero, completionHandler: nil)
+                    } else if status == .readyToPlay {
+                        // Before it plays, so a file with ungrouped dubs starts with one of them.
+                        UngroupedAudio.playOne(queued)
+                        if let intro, intro.enabled, intro.introEnd > 0,
+                           intro.validationError(duration: queued.duration.seconds) == nil, queued.currentTime().seconds < intro.introEnd {
+                            queued.seek(to: CMTime(seconds: intro.introEnd, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero, completionHandler: nil)
+                        }
                     }
                 }
             }
@@ -1176,7 +1255,7 @@ extension PlaybackSession {
         loading = upcoming.item.status != .readyToPlay
         playing = channel; automatic = upcoming.prepared.url
         player.allowsExternalPlayback = !Remux.isRemuxed(upcoming.prepared.url)
-        qualities = BilibiliStreams.qualities(for: upcoming.prepared.url)
+        qualities = DashStreams.qualities(for: upcoming.prepared.url)
         watch(upcoming.item, channel: channel, url: upcoming.prepared.url, generation: activeGeneration)
         if DanmakuSource.has(channel.url) {
             Task { [weak self] in
@@ -1264,6 +1343,16 @@ extension PlaybackSession {
     }
 
     /// AVPlayer won't play the stream's content on this device (AVFoundation -11868, Core Media -17223).
+    /// Core Media refusing every variant of a stream: -1002 when the variant names its HDR range, else -12927.
+    nonisolated static func refusedVariant(_ error: Error?) -> Bool {
+        var current = error as NSError?
+        while let error = current {
+            if error.domain == "CoreMediaErrorDomain", [-1002, -12927].contains(error.code) { return true }
+            current = error.userInfo[NSUnderlyingErrorKey] as? NSError
+        }
+        return false
+    }
+
     nonisolated static func refusedContent(_ error: Error?) -> Bool {
         var current = error as NSError?
         while let error = current {

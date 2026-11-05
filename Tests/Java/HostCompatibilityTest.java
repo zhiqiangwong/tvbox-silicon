@@ -16,8 +16,50 @@ public class HostCompatibilityTest {
             }
             return;
         }
-        reflectiveArrayCloneWorks(); conversionCacheReusesAndRepairs(); partialInitializationDoesNotHideWorkingSources(); recommendationsMerge(); stateSurvivesAndRestores(); interfaceCallsExecute(); sourceFailuresStaySpecific(); androidScreensAreNamed(); cloudLoginReturnsToTheApp(); asyncCloudLoginEndsPlayback(); packageContextExists(); androidLogHasEveryOverload(); pluginKeepsItsOwnSlf4j(); conversionFailuresNameTheClass();
+        reflectiveArrayCloneWorks(); conversionCacheReusesAndRepairs(); partialInitializationDoesNotHideWorkingSources(); recommendationsMerge(); androidBase64IsLenient(); stateSurvivesAndRestores(); interfaceCallsExecute(); sourceFailuresStaySpecific(); categoryFiltersReachTheSpider(); androidScreensAreNamed(); cloudLoginReturnsToTheApp(); asyncCloudLoginEndsPlayback(); packageContextExists(); androidLogHasEveryOverload(); androidDrawingWorks(); pluginKeepsItsOwnSlf4j(); conversionFailuresNameTheClass();
         System.out.println("Java host regression checks passed (state, interface bytecode, HTTP failures, Android context).");
+    }
+
+    private static void androidDrawingWorks() throws Exception {
+        // Wex's 配置中心 draws its tile icons with Canvas and its QR codes with setPixels, then sends them as PNG data: URLs (#360).
+        var bitmap = android.graphics.Bitmap.createBitmap(128, 128, android.graphics.Bitmap.Config.ARGB_8888);
+        var canvas = new android.graphics.Canvas(bitmap);
+        var fill = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        fill.setColor(0xff2080ff);
+        canvas.drawRoundRect(new android.graphics.RectF(5, 5, 123, 123), 27, 27, fill);
+        check(bitmap.getPixel(64, 64) == 0xff2080ff && bitmap.getPixel(6, 6) == 0 && bitmap.getPixel(6, 64) == 0xff2080ff, "Round rect not filled");
+        var line = new android.graphics.Paint(); line.setColor(0xffffffff); line.setStyle(android.graphics.Paint.Style.STROKE); line.setStrokeWidth(6);
+        var path = new android.graphics.Path(); path.moveTo(28, 78); path.cubicTo(16, 63, 29, 48, 43, 51); path.lineTo(94, 84);
+        canvas.drawPath(path, line);
+        canvas.drawCircle(64, 30, 8, fill);
+        canvas.drawText("A", 64, 64, line);
+        check(bitmap.getPixel(94, 84) == 0xffffffff && bitmap.getPixel(64, 30) == 0xff2080ff, "Path or circle not drawn");
+        var gradient = new android.graphics.Paint(1);
+        gradient.setShader(new android.graphics.LinearGradient(0, 0, 128, 0, 0xff000000, 0xffffffff, android.graphics.Shader.TileMode.CLAMP));
+        canvas.drawRect(0, 100, 128, 128, gradient);
+        check((bitmap.getPixel(0, 120) & 0xff) < 8 && (bitmap.getPixel(127, 120) & 0xff) > 248, "Gradient not drawn");
+        int[] qr = new int[21 * 21];
+        for (int i = 0; i < qr.length; i++) qr[i] = i % 2 == 0 ? 0xff000000 : 0xffffffff;
+        var code = android.graphics.Bitmap.createBitmap(21, 21, android.graphics.Bitmap.Config.RGB_565);
+        code.setPixels(qr, 0, 21, 0, 0, 21, 21);
+        var png = new java.io.ByteArrayOutputStream();
+        check(code.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, png), "PNG not written");
+        byte[] bytes = png.toByteArray();
+        check(bytes[1] == 'P' && bytes[2] == 'N' && bytes[3] == 'G', "Not a PNG");
+        var chunks = new java.io.DataInputStream(new java.io.ByteArrayInputStream(bytes, 8, bytes.length - 8));
+        var data = new java.io.ByteArrayOutputStream();
+        int width = 0;
+        while (true) {
+            byte[] type = new byte[4], body = new byte[chunks.readInt()];
+            chunks.readFully(type); chunks.readFully(body); chunks.readInt();
+            String name = new String(type, java.nio.charset.StandardCharsets.US_ASCII);
+            if (name.equals("IHDR")) width = java.nio.ByteBuffer.wrap(body).getInt();
+            else if (name.equals("IDAT")) data.write(body);
+            else if (name.equals("IEND")) break;
+        }
+        byte[] rows = new java.util.zip.InflaterInputStream(new java.io.ByteArrayInputStream(data.toByteArray())).readAllBytes();
+        // Each row: filter 0, then RGBA. The first pixel is black, the second white, both opaque.
+        check(width == 21 && rows.length == 21 * (1 + 21 * 4) && rows[1] == 0 && rows[4] == (byte) 255 && rows[5] == (byte) 255 && rows[8] == (byte) 255, "PNG pixels wrong");
     }
 
     private static void androidLogHasEveryOverload() throws Exception {
@@ -142,6 +184,34 @@ public class HostCompatibilityTest {
             public String homeContent(boolean filter) { return "{\"list\":[{\"vod_id\":\"original\"}]}"; }
         });
         check(new JSONObject(fallback.request(new JSONObject())).getJSONArray("list").length() == 1, "Empty recommendations erased home list");
+        // The aowu Bili spiders answer "[]" when they have no recommendations; TVBox shows the categories anyway.
+        PluginSession array = new PluginSession(new Spider() {
+            public String homeContent(boolean filter) { return "{\"class\":[{\"type_id\":\"music\"}]}"; }
+            public String homeVideoContent() { return "[]"; }
+        });
+        check(new JSONObject(array.request(new JSONObject())).getJSONArray("class").length() == 1, "Recommendations that are not an object failed the home page");
+    }
+
+    /** Android's Base64 skips bytes outside the alphabet; java.util.Base64 throws on them. */
+    private static void androidBase64IsLenient() {
+        var utf8 = java.nio.charset.StandardCharsets.UTF_8;
+        int plain = android.util.Base64.DEFAULT, web = android.util.Base64.URL_SAFE;
+        check(new String(android.util.Base64.decode("aGVsbG8gd29ybGQ=", plain), utf8).equals("hello world"), "Padded Base64");
+        check(new String(android.util.Base64.decode("aGVsbG8gd29ybGQ", plain), utf8).equals("hello world"), "Unpadded Base64");
+        check(new String(android.util.Base64.decode("aGVs\nbG8g d29y\r\nbGQ=", plain), utf8).equals("hello world"), "Whitespace");
+        // 七味: a '.'-separated token; SeedHub: '_' in DEFAULT mode. Android drops both characters.
+        check(new String(android.util.Base64.decode("aGVs.bG8g.d29y.bGQ=", plain), utf8).equals("hello world"), "'.' must be skipped like on Android");
+        check(new String(android.util.Base64.decode("aGVs_bG8g", plain), utf8).equals("hello "), "'_' must be skipped in DEFAULT mode");
+        check(Arrays.equals(android.util.Base64.decode("-_8", web), new byte[]{(byte) 0xfb, (byte) 0xff}), "URL-safe alphabet");
+        check(Arrays.equals(android.util.Base64.decode("+/8=", plain), new byte[]{(byte) 0xfb, (byte) 0xff}), "Standard alphabet");
+        check(android.util.Base64.decode("", plain).length == 0, "Empty input");
+        for (String bad : new String[]{"a", "aGVsbG8=x", "aG=", "=aGVs"}) {
+            try { android.util.Base64.decode(bad, plain); throw new AssertionError("Android rejects " + bad); }
+            catch (IllegalArgumentException expected) { }
+        }
+        byte[] random = new byte[257]; new Random(7).nextBytes(random);
+        for (int flags : new int[]{plain, web, android.util.Base64.NO_WRAP, android.util.Base64.NO_PADDING | web})
+            check(Arrays.equals(android.util.Base64.decode(android.util.Base64.encodeToString(random, flags), flags), random), "Round trip with flags " + flags);
     }
 
     private static void stateSurvivesAndRestores() throws Exception {
@@ -162,6 +232,19 @@ public class HostCompatibilityTest {
         Stateful restarted = new Stateful();
         new PluginSession(restarted).request(play);
         check(restarted.details == 1 && restarted.selected.equals("a"), "Restarted session did not restore details");
+        class Renaming extends Spider {
+            int details;
+            public String detailContent(List<String> ids) {
+                details++;
+                if (!ids.get(0).contains("$")) throw new ArrayIndexOutOfBoundsException("Index 1 out of bounds for length 1");
+                return "{\"list\":[{\"vod_id\":\"song\"}]}";
+            }
+            public String playerContent(String flag, String id, List<String> flags) { return "{\"url\":\"https://example.com/song.mp3\"}"; }
+        }
+        Renaming renaming = new Renaming(); PluginSession renamed = new PluginSession(renaming);
+        renamed.request(new JSONObject().put("ids", "card$song"));
+        renamed.request(new JSONObject().put("play", "episode").put("detailID", "song"));
+        check(renaming.details == 1, "Asked again for details by the id the plugin's answer named");
     }
 
     private static void interfaceCallsExecute() throws Exception {
@@ -206,6 +289,21 @@ public class HostCompatibilityTest {
         var media = new RuntimeException("Stub!");
         media.setStackTrace(new StackTraceElement[]{ new StackTraceElement("android.media.MediaPlayer", "start", null, -1) });
         check(NativeProbe.failure(media).optString("errorCode").equals("unsupported_android"), "Other Android stubs changed");
+    }
+
+    /** A category's filter choices (issue #358) reach the spider's extend map. */
+    private static void categoryFiltersReachTheSpider() throws Exception {
+        var seen = new java.util.HashMap<String, String>();
+        PluginSession session = new PluginSession(new Spider() {
+            public String categoryContent(String tid, String pg, boolean filter, java.util.HashMap<String, String> extend) {
+                seen.clear(); seen.putAll(extend);
+                return "{\"list\":[{\"vod_id\":\"1\",\"vod_name\":\"a\"}]}";
+            }
+        });
+        session.request(new JSONObject().put("t", "1").put("pg", "1").put("filters", "{\"area\":\"美国\",\"year\":\"2024\"}"));
+        check(seen.equals(java.util.Map.of("area", "美国", "year", "2024")), "Filter choices lost: " + seen);
+        session.request(new JSONObject().put("t", "1"));
+        check(seen.isEmpty(), "An unfiltered category got filters: " + seen);
     }
 
     private static void sourceFailuresStaySpecific() throws Exception {

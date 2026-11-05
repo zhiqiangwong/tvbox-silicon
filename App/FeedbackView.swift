@@ -234,6 +234,8 @@ private struct FeedbackPage: View {
     /// Chosen files still being prepared.
     @State private var adding = 0
     @State private var attachError: String?
+    /// The picture the viewer tapped in the strip, shown at full size (#468).
+    @State private var previewing: Feedback.Attachment?
     #if os(iOS)
     @State private var picked: [PhotosPickerItem] = []
     #else
@@ -287,6 +289,9 @@ private struct FeedbackPage: View {
         .background { Backdrop() }
         #endif
         .screenTitle(L10n.text("Send Feedback"), width: Layout.settingsWidth)
+        .sheet(item: $previewing) { attachment in
+            FeedbackAttachmentPreview(attachment: attachment)
+        }
     } }
     private var header: some View {
         let tile = RoundedRectangle(cornerRadius: compact ? 16 : 18, style: .continuous)
@@ -356,11 +361,14 @@ private struct FeedbackPage: View {
             Divider()
             HStack(spacing: 10) {
                 attachButton
-                // What is sent: the message and the included details.
-                let count = Feedback.combined(message, context: context).count
-                Text(verbatim: "\(count.formatted()) / \(Feedback.limit.formatted())")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(count > Feedback.limit ? AnyShapeStyle(Brand.amber) : AnyShapeStyle(.tertiary))
+                // What is sent: the message and the included details. Not while sending: on a phone the
+                // row has no room for it next to the progress and the button (#363).
+                if !sending {
+                    let count = Feedback.combined(message, context: context).count
+                    Text(verbatim: "\(count.formatted()) / \(Feedback.limit.formatted())")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(count > Feedback.limit ? AnyShapeStyle(Brand.amber) : AnyShapeStyle(.tertiary))
+                }
                 Spacer()
                 if sending, let progress {
                     ProgressView(value: progress).frame(width: compact ? 56 : 110)
@@ -374,7 +382,7 @@ private struct FeedbackPage: View {
                 #endif
                 Button(action: send) {
                     Label(sending ? (progress == nil ? L10n.text("Sending…") : L10n.text("Uploading…")) : L10n.text("Send"),
-                          systemImage: "paperplane.fill").padding(.horizontal, 6)
+                          systemImage: "paperplane.fill").lineLimit(1).fixedSize().padding(.horizontal, 6)
                 }
                 .buttonStyle(.borderedProminent).tint(systemAccent).feedbackButton(compact ? .regular : .large)
                 .keyboardShortcut(.return, modifiers: .command)
@@ -398,7 +406,8 @@ private struct FeedbackPage: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
                 ForEach(attachments) { attachment in
-                    FeedbackAttachmentTile(attachment: attachment, side: tileSide, removable: !sending) {
+                    FeedbackAttachmentTile(attachment: attachment, side: tileSide, removable: !sending,
+                                           preview: attachment.kind == .image ? { previewing = attachment } : nil) {
                         attachments.removeAll { $0.id == attachment.id }
                         Feedback.discard([attachment])
                     }
@@ -497,6 +506,7 @@ private struct FeedbackPage: View {
             #if os(macOS)
             .toggleStyle(.switch).controlSize(.small)
             #endif
+            .settingsSwitch()
             .padding(.top, 6)
             Text(FeedbackView.logNote).font(compact ? .footnote : .callout).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -576,11 +586,14 @@ private struct FeedbackPage: View {
     }
 }
 
-/// A picture or video going with the message: its thumbnail, a video's size, and a button to remove it.
+/// A picture or video going with the message: its thumbnail (a picture's opens at full size), a video's
+/// size, and a button to remove it.
 private struct FeedbackAttachmentTile: View {
     let attachment: Feedback.Attachment
     let side: CGFloat
     let removable: Bool
+    /// Opens the picture at full size; nil for a video, which the strip doesn't enlarge (#468).
+    let preview: (() -> Void)?
     let remove: () -> Void
     @State private var image: Image?
     private let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -603,7 +616,9 @@ private struct FeedbackAttachmentTile: View {
                     .background(.black.opacity(0.55), in: Capsule()).padding(4)
             }
         }
-        .overlay { shape.strokeBorder(Color.primary.opacity(0.1)) }
+        .contentShape(shape)
+        .onTapGesture { preview?() }
+        .overlay { shape.strokeBorder(Color.primary.opacity(0.1)).allowsHitTesting(false) }
         .overlay(alignment: .topTrailing) {
             if removable {
                 Button(action: remove) {
@@ -612,15 +627,53 @@ private struct FeedbackAttachmentTile: View {
                 .buttonStyle(.plain).offset(x: 6, y: -6).accessibilityLabel(L10n.text("Remove"))
             }
         }
+        .accessibilityActions {
+            if let preview { Button(L10n.text("Open"), action: preview) }
+        }
         .task(id: attachment.id) {
             guard let data = attachment.thumbnail else { return }
-            #if os(macOS)
-            image = NSImage(data: data).map { Image(nsImage: $0) }
-            #else
-            image = UIImage(data: data).map { Image(uiImage: $0) }
-            #endif
+            image = feedbackImage(from: data)
         }
     }
+}
+
+/// The picture the viewer tapped in the strip, at full size.
+private struct FeedbackAttachmentPreview: View {
+    let attachment: Feedback.Attachment
+    @Environment(\.dismiss) private var dismiss
+    @State private var image: Image?
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color.black
+                if let image {
+                    image.resizable().scaledToFit()
+                } else {
+                    ProgressView().tint(.white)
+                }
+            }
+            .ignoresSafeArea(edges: .bottom)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button(L10n.text("Done")) { dismiss() } }
+            }
+            .preferredColorScheme(.dark)
+        }
+        .discoverSheetSize(width: 1000, height: 680)
+        .task(id: attachment.id) {
+            guard let data = try? Data(contentsOf: attachment.file, options: .mappedIfSafe) else { return }
+            image = feedbackImage(from: data)
+        }
+    }
+}
+
+/// The picture in `data`, on whichever platform this builds for.
+private func feedbackImage(from data: Data) -> Image? {
+    #if os(macOS)
+    NSImage(data: data).map { Image(nsImage: $0) }
+    #else
+    UIImage(data: data).map { Image(uiImage: $0) }
+    #endif
 }
 
 #if os(iOS)

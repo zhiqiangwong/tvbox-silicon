@@ -38,11 +38,13 @@ public enum Remux {
         try await open(source, subtitles: subtitles, headers: headers, session: .shared)
     }
 
-    static func open(_ source: RemuxSource, subtitles: [ExternalSubtitle], headers: [String: String], session subtitleSession: URLSession) async throws -> URL {
+    static func open(_ source: RemuxSource, subtitles: [ExternalSubtitle], headers: [String: String], session subtitleSession: URLSession,
+                     translator: (any SubtitleTranslating)? = SubtitleTranslation.translator) async throws -> URL {
         async let files = SubtitleFile.load(subtitles, headers: headers, session: subtitleSession)
         let session = RemuxSession(source: source)
         try await session.open()
         session.add(await files)
+        if let translator { await session.addTranslations(translator) }
         RemuxStore.shared.add(session)
         do {
             let base = try await RemuxServer.shared.base()
@@ -56,8 +58,12 @@ public enum Remux {
     /// Whether `url` is served by the repackager: a file (`open`) or an HLS stream (`HLSRemux`).
     public static func isRemuxed(_ url: URL) -> Bool { identifier(url).map(RemuxStore.shared.contains) ?? false }
 
+    /// Whether `url` is an HLS stream the repackager serves (`HLSRemux`).
+    public static func isSegmented(_ url: URL) -> Bool { identifier(url).flatMap(RemuxStore.shared.segmented) != nil }
+
     /// Whether the picture behind `url` is served as HDR (PQ or HLG), not converted to SDR.
     public static func isHDR(_ url: URL) -> Bool {
+        if let stream = identifier(url).flatMap(RemuxStore.shared.segmented) { return stream.copiesHDR }
         guard let plan = session(url)?.plan, plan.tracks.first?.kind == .video else { return false }
         return plan.videoRange != "SDR"
     }
@@ -127,7 +133,7 @@ public enum Remux {
         let parts = url.path().split(separator: "/")
         return parts.count == 3 ? String(parts[1]) : nil
     }
-    private static func session(_ url: URL) -> RemuxSession? { identifier(url).flatMap(RemuxStore.shared.session) }
+    static func session(_ url: URL) -> RemuxSession? { identifier(url).flatMap(RemuxStore.shared.session) }
 }
 
 struct CloudRemuxSource: RemuxSource {
@@ -534,9 +540,13 @@ actor RemuxServer {
         let name = (file as NSString).deletingPathExtension
         switch (file as NSString).pathExtension {
         case "m3u8":
-            let text = name == "master" ? stream.master : Int(name).flatMap { stream.playlists[$0] }
-            guard let text else { return send(connection, status: 404) }
-            send(connection, status: 200, body: head ? Data() : Data(text.utf8), length: text.utf8.count, mime: "application/vnd.apple.mpegurl")
+            // A live stream's playlist is read again before it is answered.
+            Task {
+                var text: String?
+                if name == "master" { text = stream.master } else if let track = Int(name) { text = await stream.playlist(track) }
+                guard let text else { return send(connection, status: 404) }
+                send(connection, status: 200, body: head ? Data() : Data(text.utf8), length: text.utf8.count, mime: "application/vnd.apple.mpegurl")
+            }
         case "mp4", "m4s":
             let numbers = name.split(separator: "-").compactMap { Int($0) }
             guard numbers.count == 2 else { return send(connection, status: 404) }

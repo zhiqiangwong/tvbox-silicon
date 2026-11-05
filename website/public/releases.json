@@ -1,6 +1,413 @@
 {
   "releases": [
     {
+      "version": "1.8.10",
+      "build": 48,
+      "date": "2026-11-05",
+      "links": {
+        "tvos": "https://yingxia.getmegaportal.com/#install-tv"
+      },
+      "features": [
+        {
+          "symbol": "magnifyingglass",
+          "title": {
+            "en": "Search again on Apple TV",
+            "zh-Hans": "Apple TV 上可以重新搜索",
+            "zh-Hant": "Apple TV 上可以重新搜尋",
+            "ja": "Apple TV でもう一度検索"
+          },
+          "detail": {
+            "en": "Global Search's search field now runs across the top of the page. After a search, press Up from any result to get back to it and search again.",
+            "zh-Hans": "全局搜索的搜索框现在横跨页面顶部。搜索之后，在任何结果上按“上”就能回到搜索框，重新搜索。",
+            "zh-Hant": "全域搜尋的搜尋框現在橫跨頁面頂部。搜尋之後，在任何結果上按「上」就能回到搜尋框，重新搜尋。",
+            "ja": "横断検索の検索欄がページ上部いっぱいに広がりました。検索したあとも、どの結果からでも上を押せば検索欄に戻り、もう一度検索できます。"
+          },
+          "platforms": [
+            "tvos"
+          ]
+        }
+      ]
+    },
+    {
+      "version": "1.8.9",
+      "build": 47,
+      "date": "2026-11-05",
+      "links": {
+        "macos": "https://download.getmegaportal.com/yingxia/1.8.9/Yingxia-1.8.9-macos-arm64.dmg",
+        "macos-x86_64": "https://download.getmegaportal.com/yingxia/1.8.9/Yingxia-1.8.9-macos-x86_64.dmg",
+        "ios": "https://yingxia.getmegaportal.com/#install-ios",
+        "tvos": "https://yingxia.getmegaportal.com/#install-tv"
+      },
+      "features": [
+        {
+          "symbol": "calendar",
+          "title": {
+            "en": "Airing Today in Discover",
+            "zh-Hans": "发现页新增今日播出",
+            "zh-Hant": "「探索」新增今日播出",
+            "ja": "「見つける」に今日の放送"
+          },
+          "detail": {
+            "en": "Discover has new Anime Airing Today and Series Airing Today rows. Open one to see the whole week's schedule, Monday to Sunday.",
+            "zh-Hans": "发现页新增“今日番剧”和“今日剧集”两行。点开可以查看从周一到周日的整周时间表。",
+            "zh-Hant": "「探索」新增「今日番劇」和「今日劇集」兩列。點開可以查看從週一到週日的整週時間表。",
+            "ja": "「見つける」に「今日のアニメ」と「今日のドラマ」の行が加わりました。開くと月曜から日曜までの 1 週間の放送予定を見られます。"
+          }
+        },
+        {
+          "symbol": "list.bullet",
+          "title": {
+            "en": "Global Search as a list",
+            "zh-Hans": "全局搜索可以用列表显示",
+            "zh-Hant": "全域搜尋可以用列表顯示",
+            "ja": "横断検索の結果をリストで表示"
+          },
+          "detail": {
+            "en": "A new button next to Stop switches the results between posters and a list. The list shows each whole title, the source's note (episodes, quality) and the source's name, so similar titles from different sources are easier to tell apart.",
+            "zh-Hans": "“停止”旁边新增一个按钮，可以在海报和列表之间切换搜索结果。列表会显示完整片名、源的备注（集数、清晰度）和源的名字，更容易分辨不同源里相似的片名。",
+            "zh-Hant": "「停止」旁邊新增一個按鈕，可以在海報和列表之間切換搜尋結果。列表會顯示完整片名、來源的備註（集數、畫質）和來源名稱，更容易分辨不同來源裡相似的片名。",
+            "ja": "「停止」の横に、検索結果をポスターとリストで切り替えるボタンが加わりました。リストにはタイトル全体、ソースの備考（話数・画質）、ソース名が表示され、ソースごとの似たタイトルを見分けやすくなります。"
+          },
+          "platforms": [
+            "macos",
+            "ios"
+          ]
+        },
+        {
+          "symbol": "externaldrive.badge.icloud",
+          "title": {
+            "en": "Smoother cloud-drive playback",
+            "zh-Hans": "网盘视频播放更顺畅",
+            "zh-Hant": "雲端硬碟影片播放更順暢",
+            "ja": "クラウドドライブの再生がなめらかに"
+          },
+          "detail": {
+            "en": "Big 4K files from Baidu, Quark and UC buffer up to a minute ahead and stall less often. A file with two dubs, such as Mandarin and Cantonese, now plays one of them, and the other is in the Audio menu.",
+            "zh-Hans": "百度、夸克、UC 网盘里的 4K 大文件会提前缓冲最多一分钟，卡顿更少。带两条配音（比如国语和粤语）的文件现在只播放其中一条，另一条可以在“音频”菜单里切换。",
+            "zh-Hant": "百度、夸克、UC 雲端硬碟裡的 4K 大檔案會提前緩衝最多一分鐘，卡頓更少。帶兩條配音（例如國語和粵語）的檔案現在只播放其中一條，另一條可以在「音訊」選單裡切換。",
+            "ja": "Baidu・Quark・UC の大きな 4K ファイルは最大 1 分先まで読み込み、止まりにくくなりました。北京語と広東語など 2 つの吹き替えがあるファイルは片方だけを再生し、もう片方は「オーディオ」メニューで選べます。"
+          }
+        },
+        {
+          "symbol": "music.note",
+          "title": {
+            "en": "Choose your music quality",
+            "zh-Hans": "可以选择音乐音质",
+            "zh-Hant": "可以選擇音樂音質",
+            "ja": "音楽の音質を選べます"
+          },
+          "detail": {
+            "en": "Music Settings adds High (320 kbps) and Standard (128 kbps) next to Lossless first and Lossless only. They use far less data.",
+            "zh-Hans": "音乐设置在“无损优先”和“仅无损”之外，新增“高（320 kbps）”和“标准（128 kbps）”，流量小得多。",
+            "zh-Hant": "音樂設定在「無損優先」和「僅無損」之外，新增「高（320 kbps）」和「標準（128 kbps）」，流量小得多。",
+            "ja": "ミュージックの設定に「ロスレス優先」「ロスレスのみ」に加えて「高（320 kbps）」と「標準（128 kbps）」が加わりました。通信量を大幅に抑えられます。"
+          },
+          "platforms": [
+            "macos",
+            "ios"
+          ]
+        },
+        {
+          "symbol": "line.3.horizontal.decrease.circle",
+          "title": {
+            "en": "Tidier filters and Mac downloads",
+            "zh-Hans": "更清爽的筛选和 Mac 下载",
+            "zh-Hant": "更清爽的篩選和 Mac 下載",
+            "ja": "すっきりした絞り込みと Mac のダウンロード"
+          },
+          "detail": {
+            "en": "A source's category filters are now one chip each, like Region: All, as in Discover's Search Catalog. On the Mac, the Download Episodes sheet and the Downloads page are redesigned.",
+            "zh-Hans": "源的分类筛选现在每项一个按钮，比如“地区：全部”，和发现页的“搜索影视”一样。Mac 上的“下载剧集”窗口和“下载”页面也重新设计了。",
+            "zh-Hant": "來源的分類篩選現在每項一個按鈕，例如「地區：全部」，和「探索」的「搜尋影視」一樣。Mac 上的「下載劇集」視窗和「下載」頁面也重新設計了。",
+            "ja": "ソースのカテゴリ絞り込みは、「見つける」の「作品を検索」と同じく、「地域：すべて」のような項目ごとのボタンになりました。Mac では「エピソードをダウンロード」シートと「ダウンロード」ページのデザインも新しくなりました。"
+          }
+        },
+        {
+          "symbol": "iphone",
+          "title": {
+            "en": "Turn sideways for Full Screen",
+            "zh-Hans": "横过手机即可全屏",
+            "zh-Hant": "橫過手機即可全螢幕",
+            "ja": "横にすると全画面に"
+          },
+          "detail": {
+            "en": "On the iPhone watch page, turning the phone sideways opens Full Screen, and turning it upright again goes back. On iPad, Settings > Edit Tab Bar now arranges the sidebar too, and the iPhone tab bar keeps fewer than four tabs if you choose fewer.",
+            "zh-Hans": "在 iPhone 的观看页，把手机横过来就会进入全屏，竖回来就会返回。在 iPad 上，“设置”>“编辑标签栏”现在也能调整侧边栏的顺序；iPhone 的标签栏也可以少于四个标签了。",
+            "zh-Hant": "在 iPhone 的觀看頁，把手機橫過來就會進入全螢幕，直回來就會返回。在 iPad 上，「設定」>「編輯標籤列」現在也能調整側邊欄的順序；iPhone 的標籤列也可以少於四個標籤了。",
+            "ja": "iPhone の視聴ページでは、端末を横にすると全画面になり、縦に戻すと元に戻ります。iPad では「設定」>「タブバーを編集」でサイドバーの並びも変えられます。iPhone のタブバーは 4 つより少なくもできます。"
+          },
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "symbol": "magnifyingglass",
+          "title": {
+            "en": "New search on Apple TV",
+            "zh-Hans": "Apple TV 上的新搜索",
+            "zh-Hant": "Apple TV 上的新搜尋",
+            "ja": "Apple TV の新しい検索"
+          },
+          "detail": {
+            "en": "Global Search puts its search field next to the sidebar button, so results start higher on the screen. Selecting the field opens the keyboard with your recent searches and suggestions.",
+            "zh-Hans": "全局搜索的输入框移到了侧边栏按钮旁边，结果从屏幕更上方开始显示。选中输入框会打开键盘，并显示最近搜索和推荐。",
+            "zh-Hant": "全域搜尋的輸入框移到了側邊欄按鈕旁邊，結果從螢幕更上方開始顯示。選取輸入框會打開鍵盤，並顯示最近搜尋和建議。",
+            "ja": "横断検索の入力欄がサイドバーのボタンの横に移り、結果が画面の上のほうから表示されます。入力欄を選ぶと、最近の検索と候補つきのキーボードが開きます。"
+          },
+          "platforms": [
+            "tvos"
+          ]
+        },
+        {
+          "symbol": "wrench.and.screwdriver",
+          "title": {
+            "en": "Other fixes",
+            "zh-Hans": "其他修复",
+            "zh-Hant": "其他修正",
+            "ja": "その他の修正"
+          },
+          "detail": {
+            "en": "The Top Rated lists show each title's score. Tap a picture in a feedback message to see it full size. Hiding Featured Titles also hides its backdrop and trailer. 饭太硬's Quark lines play again after you sign in to Quark. More CatPawOpen sites open and load reliably on iPhone. On the Mac, Discover has no hard edge by the sidebar, and its arrows no longer open the title. Fixed a crash in the iPad app on a Mac. More sources from subscriptions with Java plugins, such as aowu.json, work on iPhone and iPad.",
+            "zh-Hans": "高分电影和高分剧集列表会显示评分。在反馈里点一下图片可以查看大图。隐藏“精选影片”时，它的背景和预告片也会一起隐藏。登录夸克后，饭太硬的夸克线路又能播放了。更多猫源站点可以打开，在 iPhone 上加载也更稳定。Mac 的发现页在侧边栏旁边不再有生硬的边缘，点箭头也不会再打开影片。修复了 iPad 版在 Mac 上运行时的一个崩溃。在 iPhone 和 iPad 上，aowu.json 等带 Java 插件的订阅里有更多点播源可以使用了。",
+            "zh-Hant": "高分電影和高分影集列表會顯示評分。在意見回饋裡點一下圖片可以查看大圖。隱藏「精選影片」時，它的背景和預告片也會一起隱藏。登入夸克後，飯太硬的夸克線路又能播放了。更多貓源站點可以打開，在 iPhone 上載入也更穩定。Mac 的「探索」在側邊欄旁邊不再有生硬的邊緣，點箭頭也不會再打開影片。修正了 iPad 版在 Mac 上執行時的一個當機問題。在 iPhone 和 iPad 上，aowu.json 等帶 Java 外掛的訂閱裡有更多隨選來源可以使用了。",
+            "ja": "高評価リストに各作品のスコアが表示されます。フィードバックの写真をタップすると大きく表示できます。「注目の作品」を非表示にすると背景と予告編も隠れます。Quark にサインインすると、饭太硬の Quark ラインが再び再生できます。より多くの猫源サイトが開け、iPhone での読み込みも安定しました。Mac の「見つける」でサイドバー脇の硬い境目がなくなり、矢印でタイトルが開かなくなりました。Mac で動く iPad 版のクラッシュを修正しました。iPhone と iPad で、aowu.json など Java プラグインを含む配信設定の配信ソースがより多く使えるようになりました。"
+          }
+        }
+      ]
+    },
+    {
+      "version": "1.8.8",
+      "build": 46,
+      "date": "2026-11-04",
+      "links": {
+        "macos": "https://download.getmegaportal.com/yingxia/1.8.8/Yingxia-1.8.8-macos-arm64.dmg",
+        "macos-x86_64": "https://download.getmegaportal.com/yingxia/1.8.8/Yingxia-1.8.8-macos-x86_64.dmg",
+        "ios": "https://yingxia.getmegaportal.com/#install-ios",
+        "tvos": "https://yingxia.getmegaportal.com/#install-tv"
+      },
+      "features": [
+        {
+          "symbol": "display",
+          "title": {
+            "en": "Play on an external display",
+            "zh-Hans": "在外接显示器上播放",
+            "zh-Hant": "在外接顯示器上播放",
+            "ja": "外部ディスプレイで再生"
+          },
+          "detail": {
+            "en": "Connect an iPad or iPhone to a TV or monitor over HDMI, USB-C or AirPlay: the video fills that screen while the controls stay on your device. Close the player and the display mirrors again.",
+            "zh-Hans": "用 HDMI、USB-C 或隔空播放把 iPad 或 iPhone 连到电视或显示器，视频会铺满那块屏幕，控制条留在手上的设备里。关掉播放器后显示器恢复镜像。",
+            "zh-Hant": "用 HDMI、USB-C 或 AirPlay 把 iPad 或 iPhone 連到電視或顯示器，影片會佔滿那個螢幕，控制列留在手上的裝置裡。關掉播放器後顯示器恢復鏡像。",
+            "ja": "iPad や iPhone を HDMI、USB-C、AirPlay でテレビやモニタにつなぐと、動画はその画面いっぱいに表示され、操作は手元のデバイスで行えます。プレーヤーを閉じるとミラーリングに戻ります。"
+          },
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "symbol": "character.bubble",
+          "title": {
+            "en": "Translated subtitles",
+            "zh-Hans": "字幕翻译",
+            "zh-Hant": "字幕翻譯",
+            "ja": "字幕の翻訳"
+          },
+          "detail": {
+            "en": "Subtitles in another language now have a translated twin in the Subtitles menu, such as \"Chinese (Translated from English)\". It is translated on the device by Apple's Translation. Needs iOS 18 or macOS 15.",
+            "zh-Hans": "外语字幕在“字幕”菜单里多了一条翻译版，比如“中文（译自英语）”。翻译用的是 Apple 的设备端翻译，需要 iOS 18 或 macOS 15。",
+            "zh-Hant": "外語字幕在「字幕」選單裡多了一條翻譯版，例如「中文（譯自英文）」。翻譯使用 Apple 的裝置端翻譯，需要 iOS 18 或 macOS 15。",
+            "ja": "外国語の字幕には、字幕メニューに「中国語（英語から翻訳）」のような翻訳版が加わります。翻訳は Apple の翻訳機能でデバイス上で行われます。iOS 18 または macOS 15 が必要です。"
+          },
+          "platforms": [
+            "macos",
+            "ios"
+          ]
+        },
+        {
+          "symbol": "line.3.horizontal.decrease.circle",
+          "title": {
+            "en": "Category filters",
+            "zh-Hans": "分类筛选",
+            "zh-Hant": "分類篩選",
+            "ja": "カテゴリの絞り込み"
+          },
+          "detail": {
+            "en": "A source's categories now show its own filters, such as genre, region and year, and the source returns titles that match your choice.",
+            "zh-Hans": "片源的分类页现在会显示它自带的筛选项，比如类型、地区、年份，选了之后片源会按你的选择返回影片。",
+            "zh-Hant": "片源的分類頁現在會顯示它自帶的篩選項，例如類型、地區、年份，選了之後片源會依你的選擇回傳影片。",
+            "ja": "ソースのカテゴリに、ジャンル・地域・年などそのソース独自の絞り込みが表示され、選んだ条件に合う作品が返ってきます。"
+          }
+        },
+        {
+          "symbol": "eye.slash",
+          "title": {
+            "en": "Hide or show many sources at once",
+            "zh-Hans": "批量隐藏或显示源",
+            "zh-Hant": "批次隱藏或顯示來源",
+            "ja": "ソースをまとめて表示・非表示"
+          },
+          "detail": {
+            "en": "Sources has a new Hide or Show Sources list: tick sources on or off, or use Show All and Hide All for a whole group, instead of hiding them one by one.",
+            "zh-Hans": "“点播源”页新增“隐藏或显示源”列表：勾选或取消各个源，也可以对整组用“全部显示”“全部隐藏”，不用再一个一个关。",
+            "zh-Hant": "「隨選來源」頁新增「隱藏或顯示來源」清單：勾選或取消各個來源，也可以對整組用「全部顯示」「全部隱藏」，不用再一個一個關。",
+            "ja": "「配信ソース」に「ソースの表示と非表示」リストが加わりました。ソースごとにチェックを切り替えたり、グループ単位で「すべて表示」「すべて隠す」を使ったりでき、1つずつ隠す必要はありません。"
+          }
+        },
+        {
+          "symbol": "flame",
+          "title": {
+            "en": "Douban hot lists in Discover",
+            "zh-Hans": "“发现”里有豆瓣热门了",
+            "zh-Hant": "「探索」裡有豆瓣熱門了",
+            "ja": "「見つける」に Douban 人気リスト"
+          },
+          "detail": {
+            "en": "Discover can show Douban's hot movies, series and variety shows with their Douban scores. It's on when the app is in Chinese; in other languages, turn it on in Edit Layout at the bottom of Discover.",
+            "zh-Hans": "“发现”页可以显示豆瓣热门电影、剧集和综艺，并附上豆瓣评分。中文界面默认打开；其他语言可以在“发现”页底部的“编辑布局”里打开。",
+            "zh-Hant": "「探索」頁可以顯示豆瓣熱門電影、劇集和綜藝，並附上豆瓣評分。中文介面預設開啟；其他語言可以在「探索」頁底部的「編輯版面」裡開啟。",
+            "ja": "「見つける」に Douban の人気映画・ドラマ・バラエティを Douban の評価つきで表示できます。中国語表示では最初からオンです。ほかの言語では「見つける」の一番下の「レイアウトを編集」でオンにできます。"
+          }
+        },
+        {
+          "symbol": "cloud",
+          "title": {
+            "en": "Built-in sources from the cloud",
+            "zh-Hans": "内置源改为在线更新",
+            "zh-Hant": "內建來源改為線上更新",
+            "ja": "内蔵ソースをクラウドから"
+          },
+          "detail": {
+            "en": "Bilibili, Hongguo, Xifan and Hema, and the Bilibili, Douyu, Huya and Douyin live channels, now come from Yingxia's online source list, so fixes reach you without an app update. They appear, together with Music, once you have added a subscription that works.",
+            "zh-Hans": "哔哩哔哩、红果、稀饭、河马，以及哔哩哔哩、斗鱼、虎牙、抖音直播，现在来自映匣的在线源列表，修复不用等 App 更新。添加一个能用的订阅后，它们和“音乐”就会出现。",
+            "zh-Hant": "嗶哩嗶哩、紅果、稀飯、河馬，以及嗶哩嗶哩、鬥魚、虎牙、抖音直播，現在來自映匣的線上來源清單，修正不用等 App 更新。加入一個能用的訂閱後，它們和「音樂」就會出現。",
+            "ja": "Bilibili・紅果・稀飯・河馬と、Bilibili・斗魚・虎牙・抖音のライブは、映匣のオンラインのソース一覧から届くようになり、アプリを更新しなくても修正が届きます。使える購読を追加すると、ミュージックと一緒に表示されます。"
+          }
+        },
+        {
+          "symbol": "wrench.and.screwdriver",
+          "title": {
+            "en": "Other fixes",
+            "zh-Hans": "其他修复",
+            "zh-Hant": "其他修正",
+            "ja": "その他の修正"
+          },
+          "detail": {
+            "en": "4K live channels that played sound only now show a picture. Holding to speed up slows down when the connection can't keep up. A video opened from history picks the line you watched. Wex config centers open in the app. 猫源 searches with no match no longer count as failures. Music over AirPlay plays as audio. Danmaku skips a server that is down and says so. The Mac icon is rounded on macOS 15.",
+            "zh-Hans": "只有声音的 4K 直播频道现在有画面了。长按倍速在网速跟不上时会自动降速。从观看历史打开的视频会选中上次看的线路。Wex 配置中心可以在 App 里打开。猫源搜不到结果不再算作失败。音乐用隔空播放时按音频播放。弹幕会跳过宕掉的服务器并提示。macOS 15 上 Mac 图标显示为圆角。",
+            "zh-Hant": "只有聲音的 4K 直播頻道現在有畫面了。長按倍速在網速跟不上時會自動降速。從觀看紀錄打開的影片會選中上次看的線路。Wex 設定中心可以在 App 裡打開。貓源搜不到結果不再算作失敗。音樂用 AirPlay 時以音訊播放。彈幕會跳過當機的伺服器並提示。macOS 15 上 Mac 圖示顯示為圓角。",
+            "ja": "音声だけだった 4K ライブチャンネルに映像が出るようになりました。長押しの倍速は回線が追いつかないと自動で下がります。履歴から開いた動画は前回見たラインを選びます。Wex の設定センターをアプリ内で開けます。猫源で検索結果がなくても失敗扱いになりません。AirPlay の音楽は音声として再生されます。弾幕は停止中のサーバーを飛ばし、そのことを表示します。macOS 15 で Mac のアイコンが角丸になりました。"
+          }
+        }
+      ]
+    },
+    {
+      "version": "1.8.7",
+      "build": 45,
+      "date": "2026-11-03",
+      "links": {
+        "macos": "https://download.getmegaportal.com/yingxia/1.8.7/Yingxia-1.8.7-macos-arm64.dmg",
+        "macos-x86_64": "https://download.getmegaportal.com/yingxia/1.8.7/Yingxia-1.8.7-macos-x86_64.dmg",
+        "ios": "https://yingxia.getmegaportal.com/#install-ios",
+        "tvos": "https://yingxia.getmegaportal.com/#install-tv"
+      },
+      "features": [
+        {
+          "symbol": "music.note.list",
+          "title": {
+            "en": "More to play in Music",
+            "zh-Hans": "音乐里能听的更多了",
+            "zh-Hant": "音樂裡能聽的更多了",
+            "ja": "ミュージックがもっと楽しく"
+          },
+          "detail": {
+            "en": "With nothing searched, Music now shows Top Charts, playlists and new albums. You can add LX Music custom sources and music extensions in Music Settings. Audiobook, radio and music sources open in the music player, and the mini player can be closed and steps aside when a video starts.",
+            "zh-Hans": "不搜索时，“音乐”页会显示排行榜、推荐歌单和新专辑。可以在“音乐设置”里添加洛雪音乐自定义源和音乐扩展。听书、电台和音乐类片源会在音乐播放器里播放；迷你播放器可以关掉，开始看视频时也会自动让开。",
+            "zh-Hant": "不搜尋時，「音樂」頁會顯示排行榜、推薦歌單和新專輯。可以在「音樂設定」裡加入洛雪音樂自訂源和音樂擴充。聽書、電台和音樂類片源會在音樂播放器裡播放；迷你播放器可以關掉，開始看影片時也會自動讓開。",
+            "ja": "何も検索していないとき、ミュージックにランキング、おすすめプレイリスト、新着アルバムが表示されます。「ミュージック設定」で LX Music カスタムソースや音楽拡張機能を追加できます。オーディオブック・ラジオ・音楽のソースはミュージックプレーヤーで再生され、ミニプレーヤーは閉じられるうえ、動画を再生すると自動で消えます。"
+          },
+          "platforms": [
+            "macos",
+            "ios"
+          ]
+        },
+        {
+          "symbol": "externaldrive.badge.icloud",
+          "title": {
+            "en": "115 cloud drive",
+            "zh-Hans": "支持 115 网盘",
+            "zh-Hant": "支援 115 網盤",
+            "ja": "115 クラウドドライブに対応"
+          },
+          "detail": {
+            "en": "Sign in to 115 in Cloud Drive Accounts by scanning a code with the 115 app, then browse, search and play its files in Cloud Files.",
+            "zh-Hans": "在“网盘账号”里用 115 App 扫码登录，就能在“网盘文件”里浏览、搜索和播放 115 的文件。",
+            "zh-Hant": "在「網盤帳號」裡用 115 App 掃碼登入，就能在「網盤檔案」裡瀏覽、搜尋和播放 115 的檔案。",
+            "ja": "「クラウドドライブのアカウント」で 115 アプリからコードを読み取ってサインインすると、「クラウドファイル」で 115 のファイルを閲覧・検索・再生できます。"
+          }
+        },
+        {
+          "symbol": "doc.badge.plus",
+          "title": {
+            "en": "Add a single spider",
+            "zh-Hans": "单个爬虫也能添加",
+            "zh-Hant": "單個爬蟲也能加入",
+            "ja": "スパイダーを1つだけ追加"
+          },
+          "detail": {
+            "en": "An address that serves one Python or JavaScript spider now adds as a subscription with that source. On iPhone, iPad and Mac, Add from File… takes .py, .js and .json files. On iPhone, a CatPawOpen bundle's config center opens inside the app with Open Config Center.",
+            "zh-Hans": "只提供一个 Python 或 JavaScript 爬虫的地址，现在也能作为订阅添加，里面就是这一个片源。在 iPhone、iPad 和 Mac 上，“从文件添加…”支持 .py、.js 和 .json 文件。在 iPhone 上，CatPawOpen 包的配置中心可以用“打开配置中心”在 App 内打开。",
+            "zh-Hant": "只提供一個 Python 或 JavaScript 爬蟲的位址，現在也能作為訂閱加入，裡面就是這一個片源。在 iPhone、iPad 和 Mac 上，「從檔案加入…」支援 .py、.js 和 .json 檔案。在 iPhone 上，CatPawOpen 套件的配置中心可以用「打開配置中心」在 App 內打開。",
+            "ja": "Python または JavaScript のスパイダーを1つだけ配信するアドレスも、そのソースだけを含む購読として追加できるようになりました。iPhone・iPad・Mac では「ファイルから追加…」で .py・.js・.json ファイルを追加できます。iPhone では CatPawOpen バンドルの設定センターを「設定センターを開く」でアプリ内で開けます。"
+          }
+        },
+        {
+          "symbol": "arrow.clockwise.circle",
+          "title": {
+            "en": "Playback that keeps going",
+            "zh-Hans": "播放更不容易中断",
+            "zh-Hant": "播放更不容易中斷",
+            "ja": "再生が止まりにくく"
+          },
+          "detail": {
+            "en": "When the connection drops, episodes reopen where they stopped instead of ending with an error. 4K HDR streams that only played as a black screen now play in SDR where HDR can't be shown, and cloud drives that refuse extra connections keep streaming.",
+            "zh-Hans": "网络断开后，剧集会从中断的位置重新打开，而不是报错结束。原来只有黑屏的 4K HDR 片源，在无法显示 HDR 时会改用 SDR 播放；拒绝多连接的网盘也能继续播放。",
+            "zh-Hant": "網路中斷後，劇集會從中斷的位置重新打開，而不是報錯結束。原本只有黑畫面的 4K HDR 片源，在無法顯示 HDR 時會改用 SDR 播放；拒絕多連線的網盤也能繼續播放。",
+            "ja": "接続が切れても、エラーで終わらずに止まった位置から再開します。黒い画面のままだった 4K HDR のストリームは、HDR を表示できない場合は SDR で再生されます。追加の接続を拒むクラウドドライブでも再生が続きます。"
+          }
+        },
+        {
+          "symbol": "list.number",
+          "title": {
+            "en": "Clear episode names",
+            "zh-Hans": "剧集名称更清楚",
+            "zh-Hant": "劇集名稱更清楚",
+            "ja": "エピソード名がわかりやすく"
+          },
+          "detail": {
+            "en": "Lines that name episodes after their files, such as netdisk lines, now show short labels like Episode 1 · 4K, so episodes no longer all look the same. The full file name is still in the context menu.",
+            "zh-Hans": "用文件名当剧集名的线路（比如网盘线路），现在显示“第1集 · 4K”这样的简短名称，不再每一集看起来都一样。完整文件名仍可在长按菜单里看到。",
+            "zh-Hant": "用檔名當劇集名的線路（例如網盤線路），現在顯示「第1集 · 4K」這樣的簡短名稱，不再每一集看起來都一樣。完整檔名仍可在長按選單裡看到。",
+            "ja": "ファイル名をエピソード名にしている回線（ネットドライブの回線など）に「第1話 · 4K」のような短い名前が表示され、どのエピソードも同じに見えることがなくなりました。完全なファイル名はコンテキストメニューで確認できます。"
+          }
+        },
+        {
+          "symbol": "wrench.and.screwdriver",
+          "title": {
+            "en": "Other fixes",
+            "zh-Hans": "其他修复",
+            "zh-Hant": "其他修正",
+            "ja": "その他の修正"
+          },
+          "detail": {
+            "en": "Downloads keep running in the background on iPhone and iPad. The danmaku menu has Text Size and Opacity for every video, including Bilibili and live rooms. Edit Tab Bar moved to Settings on iPhone. Global Search on Apple TV no longer freezes while results arrive. Hongguo plays again, and GitHub-hosted subscriptions try one more mirror when GitHub is blocked.",
+            "zh-Hans": "iPhone 和 iPad 上的下载会在后台继续。弹幕菜单里有“字号”和“不透明度”，对所有视频生效，包括哔哩哔哩和直播间。iPhone 上的“编辑标签栏”移到了设置里。Apple TV 的全局搜索在结果陆续出现时不再卡住。红果可以再次播放；GitHub 被屏蔽时，放在 GitHub 上的订阅会多试一个镜像。",
+            "zh-Hant": "iPhone 和 iPad 上的下載會在背景繼續。彈幕選單裡有「字號」和「不透明度」，對所有影片生效，包括嗶哩嗶哩和直播間。iPhone 上的「編輯標籤列」移到了設定裡。Apple TV 的全域搜尋在結果陸續出現時不再卡住。紅果可以再次播放；GitHub 被封鎖時，放在 GitHub 上的訂閱會多試一個鏡像。",
+            "ja": "iPhone と iPad でダウンロードがバックグラウンドでも続くようになりました。弾幕メニューに「文字サイズ」と「不透明度」が加わり、ビリビリやライブ配信を含むすべての動画に適用されます。iPhone の「タブバーを編集」は設定に移りました。Apple TV の横断検索で結果が届く間に固まらなくなりました。紅果が再び再生でき、GitHub がブロックされている場合、GitHub 上の購読はもう1つのミラーを試します。"
+          }
+        }
+      ]
+    },
+    {
       "version": "1.8.6",
       "build": 44,
       "date": "2026-11-02",
@@ -3114,11 +3521,11 @@
   ],
   "testflight": {
     "ios": {
-      "build": 43,
+      "build": 47,
       "link": "https://testflight.apple.com/join/dU6UNbzp"
     },
     "tvos": {
-      "build": 43,
+      "build": 47,
       "link": "https://testflight.apple.com/join/SSgWEwSr"
     }
   }

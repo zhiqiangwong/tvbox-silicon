@@ -49,6 +49,7 @@ struct PlaybackView: View {
             if session.error == nil {
                 NativePlayerView(player: session.player, comments: session.danmaku, showsDanmaku: $showsDanmaku, opacity: session.danmakuOpacity, revision: session.danmakuRevision,
                                  qualities: session.qualities, quality: session.quality, choose: { session.choose(quality: $0) },
+                                 audio: session.audioChoices, audioChoice: session.audioChoice, chooseAudio: { session.chooseAudio($0) },
                                  live: session.isLive, previous: episodeAction(store.step(back: true, from: channel, session: session)),
                                  next: episodeAction(store.step(back: false, from: channel, session: session)), waiting: waitContent,
                                  enhancer: session.enhancer, upscale: $upscalesVideo, smooth: $smoothsVideo, info: $showsPlaybackInfo,
@@ -100,11 +101,16 @@ struct PlaybackView: View {
             #endif
         }
         #if os(iOS)
+        // Registers the external-display accessory while the player is on screen (iOS 27): the system only
+        // offers the display to apps that ask for it, and takes it back when the player closes.
+        .background(ExternalDisplaySceneRegistrar().allowsHitTesting(false))
         // On a watch page the rest of the page keeps its own appearance.
         .modifier(PlayerScheme(ownsScreen: watch == nil))
         #else
         .preferredColorScheme(.dark)
         #endif
+        // Translated subtitles are translated here, where Translation can ask to download a language.
+        .subtitleTranslation()
         #if os(macOS)
         .frame(minWidth: 880, minHeight: 540)
         #endif
@@ -117,7 +123,12 @@ struct PlaybackView: View {
         .simultaneousGesture(TapGesture().onEnded { poke() })
         #endif
         #endif
-        .onAppear { startCatalogPlayback(session, channel: channel, store: store); showOnStart() }
+        .onAppear {
+            startCatalogPlayback(session, channel: channel, store: store); showOnStart()
+            #if os(iOS)
+            ExternalDisplay.shared.attach(session.player)
+            #endif
+        }
         #if DEBUG && os(iOS)
         // `-qaWatchFullScreen <seconds>`: a watch page's player goes full screen after that long, for screenshots.
         .task(id: watch != nil) {
@@ -137,6 +148,7 @@ struct PlaybackView: View {
         .onDisappear {
             hideTask?.cancel(); store.cancelEpisodeSelection(); session.stop()
             #if os(iOS)
+            ExternalDisplay.shared.detach(session.player)
             PlayerOrientation.release()
             #endif
         }
@@ -154,7 +166,7 @@ struct PlaybackView: View {
                      + " · drawing: \(session.enhancer.status.upscaling ? "upscaled " : "")\(session.enhancer.status.smoothing ? "smoothed" : session.enhancer.status.active ? "" : "AVKit picture")",
                      session.enhancer.summary]
         #if !os(macOS)
-        if let screen = (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.screen {
+        if let screen = UIApplication.shared.appWindowScene?.screen {
             lines.append("screen \(screen.maximumFramesPerSecond) Hz \(Int(screen.nativeBounds.width))×\(Int(screen.nativeBounds.height))")
         }
         #endif
@@ -218,6 +230,19 @@ struct PlaybackView: View {
                 .chromeButton()
                 .accessibilityLabel(L10n.text("Quality"))
             }
+            // A file whose sound tracks AVKit's own menu can't offer (#428).
+            if session.audioChoices.count > 1 {
+                Menu {
+                    Picker(L10n.text("Audio"), selection: Binding(get: { session.audioChoice }, set: { if let id = $0 { session.chooseAudio(id) } })) {
+                        ForEach(session.audioChoices) { Text($0.name).tag(Optional($0.id)) }
+                    }
+                    .pickerStyle(.inline)
+                } label: {
+                    Image(systemName: "speaker.wave.2").font(.headline).frame(width: 22, height: 22)
+                }
+                .chromeButton()
+                .accessibilityLabel(L10n.text("Audio"))
+            }
             // One button for danmaku: show or hide them, or open the list.
             if !session.danmaku.isEmpty {
                 Menu {
@@ -226,6 +251,7 @@ struct PlaybackView: View {
                         ForEach(DanmakuArea.allCases, id: \.self) { Text($0.title).tag($0) }
                     } label: { Label(L10n.text("Danmaku Area"), systemImage: "rectangle.tophalf.inset.filled") }
                     .pickerStyle(.menu)
+                    DanmakuStylePickers(model: session.catalogDanmaku)
                     Button { showsDanmakuList = true } label: { Label(L10n.text("Danmaku List"), systemImage: "list.bullet.rectangle") }
                 } label: {
                     Image(systemName: showsDanmaku ? "text.bubble.fill" : "text.bubble").font(.headline).frame(width: 22, height: 22)
@@ -582,7 +608,7 @@ private struct PlayerSurface: NSViewRepresentable {
     static private var holdsPortrait = false
 
     static func set(landscape: Bool) {
-        guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene else { return }
+        guard let scene = UIApplication.shared.appWindowScene else { return }
         mask = landscape ? .landscape : holdsPortrait ? .portrait : .allButUpsideDown
         var controller = scene.keyWindow?.rootViewController
         while let next = controller?.presentedViewController { controller = next }
@@ -638,6 +664,10 @@ private struct NativePlayerView: UIViewControllerRepresentable {
     var qualities: [StreamQuality] = []
     var quality: Int? = nil
     var choose: @MainActor (Int?) -> Void = { _ in }
+    /// The sound tracks AVKit's own Audio menu can't offer (`PlaybackSession.audioChoices`), and the one playing.
+    var audio: [UngroupedAudio.Choice] = []
+    var audioChoice: CMPersistentTrackID? = nil
+    var chooseAudio: @MainActor (CMPersistentTrackID) -> Void = { _ in }
     var live = false
     /// The neighbouring episodes of a catalog video, as transport-bar buttons beside the menus.
     var previous: EpisodeAction? = nil
@@ -718,6 +748,11 @@ private struct NativePlayerView: UIViewControllerRepresentable {
             let options = [UIAction(title: L10n.text("Auto"), state: quality == nil ? .on : .off) { _ in choose(nil) }]
                 + qualities.map { option in UIAction(title: option.label, state: quality == option.id ? .on : .off) { _ in choose(option.id) } }
             items.append(UIMenu(title: L10n.text("Quality") + " · " + current, image: UIImage(systemName: "sparkles.tv"), children: options))
+        }
+        if audio.count > 1 {
+            let chooseAudio = chooseAudio
+            let options = audio.map { option in UIAction(title: option.name, state: option.id == audioChoice ? .on : .off) { _ in chooseAudio(option.id) } }
+            items.append(UIMenu(title: L10n.text("Audio"), image: UIImage(systemName: "speaker.wave.2"), children: options))
         }
         if let previous {
             items.insert(UIAction(title: L10n.text("Previous Episode"), subtitle: previous.name, image: UIImage(systemName: "backward.end.fill"),
@@ -1023,6 +1058,7 @@ private struct DesktopPlaybackView: View {
                 Picker(L10n.text("Danmaku Area"), selection: $danmakuArea) {
                     ForEach(DanmakuArea.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
+                DanmakuStylePickers(model: session.catalogDanmaku)
                 Button(L10n.text("Danmaku List…")) { showsDanmakuList = true }
             }
             Divider()

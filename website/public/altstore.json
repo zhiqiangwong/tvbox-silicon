@@ -19,6 +19,36 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "1.8.9",
+          "buildVersion": "47",
+          "date": "2026-11-05",
+          "localizedDescription": "• 发现页新增今日播出\n• 全局搜索可以用列表显示\n• 网盘视频播放更顺畅\n• 可以选择音乐音质\n• 更清爽的筛选和 Mac 下载\n• 横过手机即可全屏\n• 其他修复\n\n• Airing Today in Discover\n• Global Search as a list\n• Smoother cloud-drive playback\n• Choose your music quality\n• Tidier filters and Mac downloads\n• Turn sideways for Full Screen\n• Other fixes",
+          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.9/Yingxia-1.8.9-ios.ipa",
+          "size": 118106652,
+          "sha256": "f751de0653dcf5363b032954728345f0da4d14403f11b1e43f35c2fa5dbc3fe4",
+          "minOSVersion": "17.0"
+        },
+        {
+          "version": "1.8.8",
+          "buildVersion": "46",
+          "date": "2026-11-04",
+          "localizedDescription": "• 在外接显示器上播放\n• 字幕翻译\n• 分类筛选\n• 批量隐藏或显示源\n• “发现”里有豆瓣热门了\n• 内置源改为在线更新\n• 其他修复\n\n• Play on an external display\n• Translated subtitles\n• Category filters\n• Hide or show many sources at once\n• Douban hot lists in Discover\n• Built-in sources from the cloud\n• Other fixes",
+          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.8/Yingxia-1.8.8-ios.ipa",
+          "size": 117877153,
+          "sha256": "417c45e513e36d62eace1bfeeb9cbf56a16fa2ebc38fadc5229808d33fd7b91b",
+          "minOSVersion": "17.0"
+        },
+        {
+          "version": "1.8.7",
+          "buildVersion": "45",
+          "date": "2026-11-03",
+          "localizedDescription": "• 音乐里能听的更多了\n• 支持 115 网盘\n• 单个爬虫也能添加\n• 播放更不容易中断\n• 剧集名称更清楚\n• 其他修复\n\n• More to play in Music\n• 115 cloud drive\n• Add a single spider\n• Playback that keeps going\n• Clear episode names\n• Other fixes",
+          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.7/Yingxia-1.8.7-ios.ipa",
+          "size": 117758042,
+          "sha256": "1a34c38b43b2464687f7d9e4832fc551b0931871cfa5cee853f34a2f10030f85",
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.8.6",
           "buildVersion": "44",
           "date": "2026-11-02",
@@ -36,36 +66,6 @@
           "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.5/Yingxia-1.8.5-ios.ipa",
           "size": 117006225,
           "sha256": "2757f3c59c7a3aeab5b120580fee956e88fcd2c59bc21e4a7c0fda3dc6c3bd45",
-          "minOSVersion": "17.0"
-        },
-        {
-          "version": "1.8.4",
-          "buildVersion": "42",
-          "date": "2026-10-31",
-          "localizedDescription": "• 发现\n• 你的 NAS 和媒体服务器\n• 弹幕区域可调\n• 其他修复\n\n• Discover\n• Your NAS and media server\n• Choose where danmaku go\n• Other fixes",
-          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.4/Yingxia-1.8.4-ios.ipa",
-          "size": 116425308,
-          "sha256": "133309eeb1827acbc2b5ac1b5567838185d9c460921794927b1e7022ecbfcea3",
-          "minOSVersion": "17.0"
-        },
-        {
-          "version": "1.8.3",
-          "buildVersion": "41",
-          "date": "2026-10-29",
-          "localizedDescription": "• 更多源可以播放了\n• 修复有声音没画面\n• 贡献者名单\n• 其他修复\n\n• More sources play\n• Sound but no picture, fixed\n• Meet the contributors\n• Other fixes",
-          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.3/Yingxia-1.8.3-ios.ipa",
-          "size": 115154751,
-          "sha256": "d60b94496055ae978f0b1e00cbf3e06ddc72a710e8bae3f7f0dd78628e62843c",
-          "minOSVersion": "17.0"
-        },
-        {
-          "version": "1.8.2",
-          "buildVersion": "40",
-          "date": "2026-10-28",
-          "localizedDescription": "• 猫源现已支持 Mac、iPhone 和 iPad\n• 只搜索一个源\n• 查看反馈的回复\n• 加载进度看得见\n• 选集可倒序\n• 焕然一新\n• 其他修复\n\n• CatPawOpen (猫源) sources on Mac, iPhone and iPad\n• Search just one source\n• Replies to your feedback\n• See how loading is going\n• Reverse the episode list\n• A fresher look\n• Other fixes",
-          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.2/Yingxia-1.8.2-ios.ipa",
-          "size": 115095547,
-          "sha256": "83eee78a59458b9361c6b1fdef9284e0615ccc8a9b2fc9a3ad843d9911ce8a09",
           "minOSVersion": "17.0"
         }
       ],

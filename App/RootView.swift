@@ -61,6 +61,10 @@ struct RootView: View {
         return sections
     }
     private var sections: [AppSection] {
+        #if os(iOS)
+        // The iPad's sidebar, in the order set in Settings > Edit Tab Bar (#427).
+        return PhoneTabs.sidebar(stored: storedTabs, hiding: store.hiddenSections)
+        #else
         let sections = [AppSection.home, .discover, .live, .music, .search, .sites, .files, .history, .favorites, .downloads, .settings]
             .filter { !store.hiddenSections.contains($0) }
         #if os(tvOS)
@@ -69,6 +73,7 @@ struct RootView: View {
         if store.music.track != nil, !MusicSidebarNowPlaying.inSidebarHeader { return [.nowPlaying] + sections }
         #endif
         return sections
+        #endif
     }
     #if os(tvOS)
     /// tvOS 17 has no sidebar, only the tab bar along the top, and selecting its eighth or a later tab does
@@ -136,8 +141,10 @@ struct RootView: View {
         #if os(tvOS)
         .fullScreenCover(isPresented: Binding(get: { store.music.presentsPlayer }, set: { store.music.presentsPlayer = $0 })) { MusicPlayerScreen() }
         #endif
-        // A video and a song never play over each other.
-        .onChangeCompat(of: store.playing) { _, channel in if channel != nil { store.music.pause() } }
+        // A video and a song never play over each other. The song stops rather than pausing, so its strip
+        // doesn't stay over the video and every page after it (#289); where it was stays saved, and
+        // Music's Continue Playing picks it up.
+        .onChangeCompat(of: store.playing) { _, channel in if channel != nil { store.music.stop() } }
         .modifier(PlayerPresentation(playing: $store.playing))
         #if os(tvOS) || os(macOS)
         // What another device sent, while it opens.
@@ -151,18 +158,10 @@ struct RootView: View {
     } }
     #if !os(macOS)
     #if os(iOS)
-    /// The phone's tab bar: the tabs the viewer arranged, then More with the rest and the tab bar editor. Every
-    /// iPhone screen uses it, not only compact ones: iPhone Duo's inner display is regular both ways, and there
-    /// the full set of sections overflowed the side tab bar into the system's own More list, without the editor.
-    /// iPads on iOS 17 use it too. Their classic tab bar shows seven tabs and moves the rest into UIKit's More list,
-    /// which wraps each tab's NavigationStack in its own navigation controller: opening a section there and then
-    /// another tab crashed with "Layout requested for visible navigation bar ... nest wrapped navigation
-    /// controllers" (#301). Seven sections and the app's own More fit that bar without the system list.
+    /// The phone's tab bar: the tabs the viewer arranged in Settings, then More with the rest. Which screens use
+    /// it, and why: `PhoneTabs.inUse`.
     @AppStorage(PhoneTabs.labelsKey) private var showsTabLabels = true
-    private var phoneTabs: Bool {
-        if #unavailable(iOS 18) { return true }
-        return sizeClass == .compact || UIDevice.current.userInterfaceIdiom == .phone
-    }
+    private var phoneTabs: Bool { PhoneTabs.inUse(horizontal: sizeClass) }
     /// Sections a phone reaches through More, as arranged in the tab bar editor.
     private var inMore: [AppSection] { PhoneTabs(stored: storedTabs).arranged(slots: barSlots, hiding: store.hiddenSections).more }
     private var barSlots: Int { PhoneTabs.slots(horizontal: sizeClass, vertical: verticalSizeClass) }
@@ -187,7 +186,7 @@ struct RootView: View {
             #endif
             #if os(iOS)
             .minimizesTabBarOnScroll()
-            .musicAccessory(enabled: store.music.track != nil && phoneTabs)
+            .musicAccessory(enabled: store.music.showsStrip(videoPlaying: store.playing != nil) && phoneTabs)
             // Opened from the mini player; swiping down closes it, as in Music.
             .sheet(isPresented: Binding(get: { store.music.presentsPlayer }, set: { store.music.presentsPlayer = $0 })) { MusicNowPlayingScreen() }
             .onChangeCompat(of: store.section) { _, section in
@@ -364,7 +363,9 @@ private struct PlayerPresentation: ViewModifier {
         // An iPhone watch page plays its own video at the top of the page (`VideoDetailView`).
         content.fullScreenCover(item: Binding(get: { store.playsInWatchPage(playing) ? nil : playing.map(PlayerSlot.init) },
                                               set: { if $0 == nil, !store.playsInWatchPage(playing) { playing = nil } })) {
-            PlaybackView(channel: $0.channel)
+            // Handed in: the iPad app on a Mac presents a full-screen cover without the presenter's environment
+            // objects, and every video stopped the app there ("No Observable object of type Store found").
+            PlaybackView(channel: $0.channel).environment(store)
         }
         #endif
     } }

@@ -1,5 +1,6 @@
 import SwiftUI
 import TVCore
+import UniformTypeIdentifiers
 
 // MARK: Settings building blocks
 // The pages under Settings are built from these, so they match the Settings page itself: the
@@ -349,6 +350,9 @@ struct FormSettingsView: View {
     @AppStorage(ErrorReports.key) private var sendsErrorReports = true
     @AppStorage(TMDBMatch.key) private var looksUpTMDB = true
     @AppStorage(CloudSync.enabledKey) private var syncsWithICloud = true
+    #if os(macOS)
+    @State private var choosesFile = false
+    #endif
     #if os(iOS)
     @State private var addingSubscription = false
     @State private var showsFeedback = false
@@ -447,7 +451,7 @@ struct FormSettingsView: View {
                 Text(L10n.text("Subscriptions"))
                 #endif
             } footer: {
-                if let message = store.error ?? store.notice { Text(message) }
+                if let message = store.importError ?? store.notice { Text(message) }
             }
 
             Section(L10n.text("Accounts")) {
@@ -475,6 +479,7 @@ struct FormSettingsView: View {
                 FormLink(symbol: AppSection.home.icon, tint: Brand.cyan, title: L10n.text("Watch Now")) { WatchNowSettingsView() }
                 FormLink(symbol: "slider.horizontal.below.rectangle", tint: .orange, title: L10n.text("Playback")) { PlaybackSettingsView() }
                 FormLink(symbol: "play.fill", tint: Brand.indigo, title: L10n.text("Play a URL")) { PlayURLView() }
+                EditTabBarRow()
                 Toggle(isOn: $showsTabLabels) {
                     FormLabel(symbol: "dock.rectangle", tint: .gray, title: L10n.text("Tab Bar Labels"))
                 }
@@ -764,8 +769,13 @@ struct FormSettingsView: View {
             Spacer()
             if store.importing { ProgressView().controlSize(.small); ElapsedTime() }
             Button(L10n.text("Use a Demo URL")) { store.subscriptionAddress = Store.defaultURL }
+            Button(L10n.text("Add from File…")) { choosesFile = true }.disabled(store.importing)
+                .help(L10n.text("A TVBox JSON subscription, or one Python (.py) or JavaScript (.js) spider."))
             Button(store.importing ? L10n.text("Importing…") : L10n.text("Add Subscription")) { add() }
                 .buttonStyle(.borderedProminent).disabled(!canAdd)
+        }
+        .fileImporter(isPresented: $choosesFile, allowedContentTypes: SubscriptionFile.types) { result in
+            if case .success(let file) = result { Task { await store.importSubscriptionFile(file) } }
         }
     }
     #endif
@@ -917,6 +927,7 @@ private struct AddSubscriptionSheet: View {
     @Environment(Store.self) private var store
     @Environment(\.dismiss) private var dismiss
     @FocusState private var focused: Bool
+    @State private var choosesFile = false
     private var canAdd: Bool { !store.importing && !store.subscriptionAddress.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
     var body: some View { AppPerceptionTracking {
@@ -936,7 +947,7 @@ private struct AddSubscriptionSheet: View {
                         .submitLabel(.done)
                         .onSubmit(add)
                 } footer: {
-                    if let error = store.error { Text(error).foregroundStyle(Brand.amber) }
+                    if let error = store.importError { Text(error).foregroundStyle(Brand.amber) }
                     else { Text(L10n.text("Paste the address of a TVBox JSON subscription, an M3U or TXT live playlist, or an AList server.")) }
                 }
                 // Offered, never filled in or imported on its own.
@@ -946,6 +957,13 @@ private struct AddSubscriptionSheet: View {
                             .foregroundStyle(.primary)
                     }
                 }
+                Section {
+                    Button { choosesFile = true } label: {
+                        FormLabel(symbol: "doc.badge.plus", tint: .orange, title: L10n.text("Add from File…"))
+                            .foregroundStyle(.primary)
+                    }
+                    .disabled(store.importing)
+                } footer: { Text(L10n.text("A TVBox JSON subscription, or one Python (.py) or JavaScript (.js) spider.")) }
             }.settingsRows() }
             .settingsForm(L10n.text("Add Subscription"))
             .toolbar {
@@ -961,17 +979,29 @@ private struct AddSubscriptionSheet: View {
             }
         }
         .presentationDetents([.medium, .large])
-        .onAppear { store.error = nil; focused = true }
+        .onAppear { store.importError = nil; focused = true }
+        .fileImporter(isPresented: $choosesFile, allowedContentTypes: SubscriptionFile.types) { result in
+            guard case .success(let file) = result else { return }
+            Task {
+                await store.importSubscriptionFile(file)
+                if store.importError == nil { dismiss() }
+            }
+        }
     } }
     private func add() {
         guard canAdd else { return }
         Task {
             await store.importSubscription()
-            if store.error == nil { dismiss() }
+            if store.importError == nil { dismiss() }
         }
     }
 }
 #endif
+
+/// What Add from File offers: a subscription, or one spider script.
+enum SubscriptionFile {
+    static let types: [UTType] = [.json, .pythonScript, .javaScript]
+}
 
 /// One subscription: switch it on or off, move it (earlier subscriptions win duplicate sources), or remove it.
 private struct SubscriptionDetailView: View {
@@ -1901,14 +1931,14 @@ private struct TVAddSubscriptionPage: View {
         @AppBindable var store = store
         let empty = store.subscriptionAddress.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         TVSettingsSubpage(symbol: "plus.rectangle.on.rectangle", title: L10n.text("Add Subscription")) {
-            TVSettingsSection(title: L10n.text("Subscription"), footer: store.error ?? store.notice) {
+            TVSettingsSection(title: L10n.text("Subscription"), footer: store.importError ?? store.notice) {
                 TVSettingsField(title: L10n.text("Subscription URL (TVBox JSON, M3U or TXT)"), text: $store.subscriptionAddress)
                 TVSettingsField(title: L10n.text("Name (optional)"), text: $store.subscriptionName)
                 TVSettingsAction(title: store.importing ? L10n.text("Importing…") : L10n.text("Add Subscription"), busy: store.importing) {
                     Task {
                         let before = store.subscriptions.count
                         await store.importSubscription()
-                        if store.error == nil, store.subscriptions.count > before { dismiss() }
+                        if store.importError == nil, store.subscriptions.count > before { dismiss() }
                     }
                 }
                 .disabled(store.importing || empty)

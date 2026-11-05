@@ -21,11 +21,13 @@ import UniformTypeIdentifiers
             if automatic { startAutomatic(automaticContext) } else { cancelAutomatic() }
         }
     }
-    var opacity = UserDefaults.standard.object(forKey: "danmakuOpacity") as? Double ?? 0.85 {
-        didSet { UserDefaults.standard.set(opacity, forKey: "danmakuOpacity") }
+    /// Applies to every track, Bilibili's own and live rooms included; the player's danmaku menu sets it too.
+    var opacity = UserDefaults.standard.object(forKey: DanmakuStyle.opacityKey) as? Double ?? DanmakuStyle.standardOpacity {
+        didSet { UserDefaults.standard.set(opacity, forKey: DanmakuStyle.opacityKey) }
     }
-    var fontSize = UserDefaults.standard.object(forKey: "danmakuFontSize") as? Double ?? 22 {
-        didSet { UserDefaults.standard.set(fontSize, forKey: "danmakuFontSize") }
+    /// Read by `DanmakuOverlay` from the same key, so it sizes every track, not only these comments.
+    var fontSize = UserDefaults.standard.object(forKey: DanmakuStyle.fontSizeKey) as? Double ?? DanmakuStyle.standardFontSize {
+        didSet { UserDefaults.standard.set(fontSize, forKey: DanmakuStyle.fontSizeKey) }
     }
     private var generation = UUID()
     private var automaticTask: Task<Void, Never>?
@@ -46,7 +48,7 @@ import UniformTypeIdentifiers
             rendered = comments.map { comment in
                 Danmaku(time: max(0, comment.time + offset),
                     position: comment.mode == .top ? .top : comment.mode == .bottom ? .bottom : .scroll,
-                    color: comment.color, scale: fontSize / 22, text: comment.text)
+                    color: comment.color, text: comment.text)
             }
         }
         return rendered
@@ -62,11 +64,7 @@ import UniformTypeIdentifiers
             guard let self else { return }
             defer { if self.generation == active { self.automaticTask = nil } }
             do {
-                let defaults = UserDefaults.standard
-                let resolver = DanmakuResolver(dandanServer: defaults.string(forKey: "danmakuServer") ?? CatalogDanmakuClient.defaultServer,
-                    dmkuServer: URL(string: defaults.string(forKey: "danmakuDmkuServer") ?? "https://dmku.hls.one/") ?? URL(string: "https://dmku.hls.one/")!,
-                    officialLookup: defaults.object(forKey: "danmakuOfficialLookup") == nil || defaults.bool(forKey: "danmakuOfficialLookup"))
-                let result = try await resolver.resolve(context)
+                let result = try await Self.resolver().resolve(context)
                 try Task.checkCancellation()
                 guard self.generation == active, self.enabled, self.automatic else { return }
                 self.comments = result.comments
@@ -96,16 +94,20 @@ import UniformTypeIdentifiers
             guard !Task.isCancelled, self.generation == active, !self.comments.isEmpty else { return }
             try? await Task.sleep(for: .seconds(3))
             guard !Task.isCancelled, self.generation == active else { return }
-            let defaults = UserDefaults.standard
-            let resolver = DanmakuResolver(dandanServer: defaults.string(forKey: "danmakuServer") ?? CatalogDanmakuClient.defaultServer,
-                dmkuServer: URL(string: defaults.string(forKey: "danmakuDmkuServer") ?? "https://dmku.hls.one/") ?? URL(string: "https://dmku.hls.one/")!,
-                officialLookup: defaults.object(forKey: "danmakuOfficialLookup") == nil || defaults.bool(forKey: "danmakuOfficialLookup"))
-            _ = try? await resolver.resolve(context, ticket: ticket)
+            _ = try? await Self.resolver().resolve(context, ticket: ticket)
         }
+    }
+    private static func resolver() -> DanmakuResolver {
+        let defaults = UserDefaults.standard
+        return DanmakuResolver(dandanServer: defaults.string(forKey: "danmakuServer") ?? CatalogDanmakuClient.defaultServer,
+            dmkuServer: URL(string: defaults.string(forKey: "danmakuDmkuServer") ?? "https://dmku.hls.one/") ?? URL(string: "https://dmku.hls.one/")!,
+            officialLookup: defaults.object(forKey: "danmakuOfficialLookup") == nil || defaults.bool(forKey: "danmakuOfficialLookup"))
     }
     func retryAutomatic() {
         let context = automaticContext
         if let context { MediaCache.shared.remove(DanmakuResolver.episodeKey(context), kind: .danmaku, scope: context.id) }
+        // A retry asks comment servers that failed a moment ago, too.
+        Self.resolver().forgetUnreachableServers()
         clear(); startAutomatic(context)
     }
 

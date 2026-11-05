@@ -97,6 +97,7 @@
 "Video Details" = "影片详情";
 "This media cannot be played. Try another channel or source." = "媒体无法播放，请尝试其他频道或线路。";
 "Playback was interrupted." = "播放中断。";
+"The connection dropped. Reconnecting" = "连接已中断，正在重新连接";
 "Close" = "关闭";
 "Connecting…" = "正在连接…";
 "Enter a valid HTTP or HTTPS URL." = "请输入有效的 HTTP 或 HTTPS 地址。";
@@ -378,6 +379,8 @@
 "Try another keyword." = "请更换关键词。";
 "Show Details" = "查看详情";
 "Hide Details" = "收起详情";
+"Show as List" = "以列表显示";
+"Show as Grid" = "以网格显示";
 "%lld of %lld sources responded" = "%lld / %lld 个源已响应";
 "First-time setup can take a few minutes. Keep the app open." = "首次准备可能需要几分钟，请保持 App 打开。";
 "This source requires Android features that the plugin runtime does not support yet." = "此源依赖插件运行时尚未支持的 Android 功能。";
@@ -526,6 +529,7 @@
 "Storage" = "存储空间";
 "%@ free" = "可用 %@";
 "used by downloads" = "已被下载占用";
+"%@ used by downloads" = "下载已占用 %@";
 "Other" = "其他";
 "Free" = "可用";
 "tvOS may remove downloads when Apple TV runs low on storage." = "Apple TV 存储空间不足时，tvOS 可能会删除下载内容。";
@@ -615,6 +619,13 @@
 "Manage Sources" = "管理点播源";
 "Hidden Sources" = "已隐藏的源";
 "Hidden" = "已隐藏";
+"Hide or Show Sources" = "隐藏或显示源";
+"%lld hidden" = "已隐藏 %lld 个";
+"Choose many sources at once, or a whole subscription." = "一次选择多个源，或整个订阅。";
+"Ticked sources are shown. Hidden sources stay out of Watch Now and search." = "勾选的源会显示。已隐藏的源不会出现在“现在观看”和搜索中。";
+"Show All Sources" = "显示全部源";
+"Show All" = "全部显示";
+"Hide All" = "全部隐藏";
 "Pinned Sources" = "置顶点播源";
 "Search history" = "搜索播放历史";
 "Manage history" = "管理历史";
@@ -651,6 +662,8 @@
 
 "Hongguo" = "红果短剧";
 "Episode %@" = "第 %@ 集";
+"Episode %1$@" = "第%1$@集";
+"Episodes %1$@–%2$@" = "第%1$@-%2$@集";
 "Live-action Drama" = "真人剧";
 "Animated Drama" = "漫剧";
 "AI Drama" = "AI 剧";
@@ -745,6 +758,7 @@
 "%@ needs this account for the line you chose. The video plays once you confirm." = "「%@」的这条线路需要该账号。确认登录后即可播放。";
 "Sign in to Quark and UC on their official page, and to Baidu and Aliyun by scanning a code with their phone app. Yingxia stores the login on this Mac and supplies it to the plugins you run." = "夸克和 UC 在官方页面登录，百度网盘和阿里云盘用手机 App 扫码登录。映匣会将登录信息保存在这台 Mac 上，并提供给你运行的插件。";
 "Baidu Cookie (BDUSS, STOKEN)" = "百度网盘 Cookie（BDUSS、STOKEN）";
+"115 Cookie (UID, CID, SEID)" = "115 Cookie（UID、CID、SEID）";
 
 /* Music */
 "Music" = "音乐";
@@ -765,9 +779,10 @@
 "Back 15 Seconds" = "后退 15 秒";
 "Forward 15 Seconds" = "前进 15 秒";
 "Channels" = "播放渠道";
+"Open in Video Player" = "在视频播放器中打开";
 "The quality shown is read from the audio itself, not taken from what a channel claims." = "显示的音质读取自音频本身，而不是渠道的声称。";
 "Not tried yet" = "尚未尝试";
-"Lossless first plays the best lossy stream, marked as such, when no channel has lossless audio. Lossless only stops instead." = "“无损优先”在没有渠道提供无损音频时，会播放最好的有损版本并加以标注；“仅无损”则停止播放。";
+"Lossless first plays the best lossy stream, marked as such, when no channel has lossless audio. Lossless only stops instead. High and Standard ask every channel for 320 or 128 kbps lossy audio, which uses far less data." = "“无损优先”在没有渠道提供无损音频时，会播放最好的有损版本并加以标注；“仅无损”则停止播放。“高”和“标准”会让所有渠道提供 320 或 128 kbps 的有损音频，流量小得多。";
 "QQ Music" = "QQ 音乐";
 "NetEase Cloud Music" = "网易云音乐";
 "QQ Music, when VKeys fails" = "QQ 音乐，VKeys 失败时使用";
@@ -787,6 +802,8 @@
 "GD Music" = "GD音乐台";
 "Lossless first" = "无损优先";
 "Lossless only" = "仅无损";
+"High (320 kbps)" = "高（320 kbps）";
+"Standard (128 kbps)" = "标准（128 kbps）";
 "No matching song was found." = "没有找到匹配的歌曲。";
 "This channel has no audio for the song." = "此渠道没有这首歌的音频。";
 "This channel only has a %lld-second preview." = "此渠道只有 %lld 秒试听。";
@@ -833,6 +850,7 @@
 "Choose your tabs and their order." = "选择要显示的标签及其顺序。";
 "Drag to reorder. Up to four sections fit in the tab bar; the rest stay in More." = "拖动即可调整顺序。标签栏最多放四项，其余的留在“更多”中。";
 "Drag to reorder. Up to seven sections fit in the tab bar here, and four when the phone is closed; the rest stay in More." = "拖动即可调整顺序。这里的标签栏最多放七项，合上时放四项，其余的留在“更多”中。";
+"Drag to reorder. The tab bar and the sidebar show sections in this order." = "拖动即可调整顺序。标签栏和边栏会按这个顺序显示。";
 "Add" = "添加";
 "Paste the address of a TVBox JSON subscription, an M3U or TXT live playlist, or an AList server." = "粘贴 TVBox JSON 订阅地址、M3U / TXT 直播列表地址，或 AList 服务器地址。";
 "Up to Date" = "已是最新";
@@ -974,7 +992,7 @@
 "Added the AList server %@. Browse it in Cloud Files." = "已添加 AList 服务器 %@，可在“网盘文件”中浏览。";
 "Added %lld AList servers. Browse them in Cloud Files." = "已添加 %lld 个 AList 服务器，可在“网盘文件”中浏览。";
 "This address is now an AList server. Add it again to browse it in Cloud Files." = "此地址现在是 AList 服务器。重新添加即可在“网盘文件”中浏览。";
-"Sign in to Quark or UC under Cloud Drive Accounts to browse their files here." = "在“网盘账号”中登录夸克或 UC 后，即可在此浏览其中的文件。";
+"Sign in to Quark, UC or 115 under Cloud Drive Accounts to browse their files here." = "在“网盘账号”中登录夸克、UC 或 115 后，即可在此浏览其中的文件。";
 "Add an AList or OpenList server, a NAS's WebDAV share, or an Emby or Jellyfin server, by the address you open it at. Pasting an AList address, or a TVBox AList configuration, in Add Subscription adds servers too." = "用打开 AList、OpenList 服务器、NAS 的 WebDAV 共享或 Emby、Jellyfin 服务器的地址来添加它。在“添加订阅”中粘贴 AList 地址或 TVBox AList 配置，也能添加服务器。";
 "Edit Server" = "编辑服务器";
 "Remove Server" = "移除服务器";
@@ -1029,6 +1047,7 @@
 "Touch and Hold Speed" = "长按倍速";
 "Touch and hold the video to play at this speed. Slide sideways to change it, or slide down to keep it after you let go." = "长按视频画面以此速度播放。按住时左右滑动可调整倍速，向下滑动可在松手后保持。";
 "Slide sideways to change the speed, or down to keep it" = "左右滑动调整倍速，向下滑动锁定";
+"Slowed down to keep up with the connection" = "网速跟不上，已自动降低倍速";
 "Back to Normal Speed" = "恢复正常速度";
 "%lld s" = "%lld 秒";
 "Brightness" = "亮度";
@@ -1350,3 +1369,59 @@
 "This build is missing its Dandanplay API configuration." = "此版本缺少弹弹play API 配置。";
 "Uses Dandanplay first, then tries iQIYI and Tencent Video if no comments are found or the service is unavailable. Official public episode pages are sent to dmku, or to danmu.zxz.ee when dmku has none; stream URLs and playback headers are never sent." = "优先使用弹弹play；没有找到弹幕或服务不可用时，再查询爱奇艺和腾讯视频。仅将官方公开单集页面交给 dmku（dmku 没有时交给 danmu.zxz.ee），不发送播放流地址或请求头。";
 "Dandanplay has reached its request limit for now. Try again later, or choose another danmaku server." = "弹弹play 的请求次数暂时用完了，请稍后再试，或换一个弹幕服务器。";
+"Open Config Center" = "打开配置中心";
+"Config Center" = "配置中心";
+"Top Charts" = "排行榜";
+"Recommended Playlists" = "推荐歌单";
+"New Albums" = "新碟上架";
+"More Charts" = "更多榜单";
+"Add from File…" = "从文件添加…";
+"A TVBox JSON subscription, or one Python (.py) or JavaScript (.js) spider." = "TVBox JSON 订阅，或单个 Python（.py）或 JavaScript（.js）爬虫。";
+"This file is no longer on this device. Add it again." = "此文件已不在本设备上，请重新添加。";
+"LX Music Sources" = "洛雪音乐自定义源";
+"LX Music Source" = "洛雪音源";
+"This file is not an LX Music source." = "这不是洛雪音乐的自定义源脚本。";
+"This source plays none of the catalogs Yingxia searches (QQ Music, NetEase Cloud Music, Kuwo, Migu)." = "这个音源不支持映匣搜索的任何曲库（QQ 音乐、网易云音乐、酷我、咪咕）。";
+"The LX Music source did not start: %@" = "洛雪音源无法启动：%@";
+"Scripts made for LX Music's custom sources. They are asked for a song's audio after the channels above, for QQ Music, NetEase Cloud Music, Kuwo and Migu songs. Yingxia includes none: add only sources you trust." = "为洛雪音乐“自定义源”编写的脚本。上面的通道之后才会向它们获取歌曲音频，适用于 QQ 音乐、网易云音乐、酷我和咪咕的歌曲。映匣不自带任何音源，请只添加你信任的音源。";
+"Added “%@”." = "已添加“%@”。";
+"Remove “%@”" = "移除“%@”";
+"Add from Address" = "从地址添加";
+"Source address" = "音源地址";
+"Music Extensions" = "音乐扩展";
+"Music Extension" = "音乐扩展";
+"Extension" = "扩展";
+"Extension address" = "扩展地址";
+"This file is not a music extension." = "这个文件不是音乐扩展。";
+"The music extension failed: %@" = "音乐扩展出错：%@";
+"This extension plays songs through an LX Music source." = "这个扩展需要通过洛雪音源播放歌曲。";
+"This extension plays songs through an LX Music source. Add one in Music Settings." = "这个扩展需要通过洛雪音源播放歌曲。请在音乐设置中添加一个。";
+"None of your LX Music sources plays this song's catalog." = "你添加的洛雪音源都不支持这首歌所在的曲库。";
+"This extension asks an LX Music source for something Yingxia doesn't support." = "这个扩展向洛雪音源请求的内容映匣尚不支持。";
+"Scripts in the Listenify music extension format. Their charts and playlists show on the Music page and their songs in Music search; songs play from what the extension gives, or through your LX Music sources when it asks for one. Yingxia includes none: add only extensions you trust." = "Listenify 格式的音乐扩展脚本。它们的榜单和歌单显示在音乐页，歌曲出现在音乐搜索中；歌曲从扩展给出的地址播放，扩展需要时也会通过你的洛雪音源播放。映匣不自带任何扩展：只添加你信任的扩展。";
+"Douban Hot Lists" = "豆瓣热门";
+"Douban Hot Movies" = "豆瓣热门电影";
+"Douban Hot Series" = "豆瓣热门剧集";
+"Douban Hot Variety Shows" = "豆瓣热门综艺";
+"Douban" = "豆瓣";
+
+"%@ (Translated from %@)" = "%@（译自%@）";
+
+"Airing Schedule" = "播出时间表";
+"Anime" = "番剧";
+"Nothing Airing" = "当天没有播出";
+"Couldn't load the airing schedule." = "无法加载播出时间表。";
+"Data:" = "数据来源：";
+"The schedule sources can't be reached right now, so this is an older copy." = "暂时无法连接时间表来源，以下为较早的版本。";
+"Full Schedule" = "完整时间表";
+"Chinese Series" = "国产剧";
+"Hong Kong & Taiwan Series" = "港台剧";
+"American Series" = "美剧";
+"Japanese Series" = "日剧";
+"Korean Series" = "韩剧";
+"British Series" = "英剧";
+"Today" = "今天";
+"Airs Next" = "即将播出";
+"Anime Airing Today" = "今日番剧";
+"Series Airing Today" = "今日剧集";
+"Day" = "日期";

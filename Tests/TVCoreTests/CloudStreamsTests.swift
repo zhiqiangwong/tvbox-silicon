@@ -91,6 +91,32 @@ struct CloudStreamsTests {
         await stream.clear()
     }
 
+    /// Issue #433: on the iPhone AVPlayer reads a video on two overlapping requests, the newer starting a few chunks
+    /// behind where the older got to, while another request reads its sound further back. The newer one counted as a
+    /// third reader, a seek, which cancelled the chunks the others were reading ahead: a bundle's proxy then fetched them
+    /// again and again, and a 4K episode stalled once the speed fell below its bitrate.
+    @Test func overlappingRequestsDoNotFetchChunksAgain() async throws {
+        let chunk = CloudByteStream.chunkSize
+        let size = chunk * 48
+        var bytes = Data(count: size)
+        bytes.withUnsafeMutableBytes { raw in for i in 0..<size { raw[i] = UInt8(truncatingIfNeeded: i &* 11 &+ i >> 13) } }
+        let name = "overlap-\(UUID().uuidString).mp4"
+        // Answered a little later, so the chunks read ahead are still on their way when the next read comes.
+        let url = RangeServer.add(name, bytes, connections: 64)
+        let stream = CloudByteStream(source: .init(url: url, headers: [:], length: size, name: name), session: RangeServer.session, parallel: 2) { nil }
+        for step in 0..<16 {
+            // The sound, the video, and the video's newer request three chunks behind it.
+            for index in [step, 14 + step, 11 + step] {
+                let at = index * chunk + 5
+                #expect(try await stream.read(at: at, count: 16) == bytes[at..<at + 16])
+            }
+        }
+        // None was dropped on its way, and chunks 0 to 29 plus at most 8 read ahead were each fetched once.
+        #expect(RangeServer.cancels(name) == 0)
+        #expect(RangeServer.requests(name) <= 38)
+        await stream.clear()
+    }
+
     /// AVPlayer opens and plays a real movie through the resource loader. Set TVBOX_CLOUD_MEDIA to
     /// an MP4 (for example one whose moov comes after a large mdat, as on cloud drives).
     @Test(.enabled(if: ProcessInfo.processInfo.environment["TVBOX_CLOUD_MEDIA"] != nil))
@@ -166,6 +192,39 @@ struct CloudStreamsTests {
         await stream.clear()
     }
 
+    /// Issue #312: 115 answers 403 to connections past a few at once on a link it is serving. The reads wait for a
+    /// connection instead of failing, and the stream reads ahead on fewer.
+    @Test func aDriveThatCapsConnectionsIsReadOnFewer() async throws {
+        let chunk = CloudByteStream.chunkSize
+        let size = chunk * 24
+        var bytes = Data(count: size)
+        bytes.withUnsafeMutableBytes { raw in for i in 0..<size { raw[i] = UInt8(truncatingIfNeeded: i &* 7 &+ i >> 11) } }
+        let url = RangeServer.add("capped.mkv", bytes, connections: 2)
+        let stream = CloudByteStream(source: .init(url: url, headers: [:], length: size, name: "capped.mkv"), session: RangeServer.session) { nil }
+        func sequential(from start: Int, chunks: Int) async throws -> Data {
+            var at = start, copy = Data()
+            while at < start + chunks * chunk { let part = try await stream.read(at: at, count: start + chunks * chunk - at); copy.append(part); at += part.count }
+            return copy
+        }
+        #expect(try await stream.read(at: 0, count: 4) == bytes.prefix(4))
+        // FFmpeg reads an MKV's index at the end while the start is still being read ahead.
+        async let video = sequential(from: 0, chunks: 16)
+        async let index = sequential(from: chunk * 20, chunks: 4)
+        #expect(try await video == bytes[0..<chunk * 16])
+        #expect(try await index == bytes[chunk * 20..<size])
+        #expect(RangeServer.refusals("capped.mkv") > 0)
+        await stream.clear()
+    }
+
+    /// A link refused before it sent anything is not waited on: it failed, as an expired one does.
+    @Test func aLinkRefusedFromTheStartFails() async throws {
+        let url = RangeServer.add("refused.mkv", Data(count: 64), connections: 0)
+        let stream = CloudByteStream(source: .init(url: url, headers: [:], length: 64, name: "refused.mkv"), session: RangeServer.session) { nil }
+        await #expect(throws: (any Error).self) { try await stream.read(at: 0, count: 4) }
+        #expect(RangeServer.requests("refused.mkv") == 1)
+        await stream.clear()
+    }
+
     @Test func anExpiredAddressIsResolvedAgain() async throws {
         let size = CloudByteStream.chunkSize + 10
         let (url, bytes) = try await served("a.mp4", size: size)
@@ -190,6 +249,13 @@ final class RangeServer: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) private static var counts: [String: Int] = [:]
     /// Answers a drive gives now and then: `empty` ranges with no bytes, then at most `cap` bytes per range.
     nonisolated(unsafe) private static var faults: [String: (empty: Int, cap: Int?)] = [:]
+    /// Files that answer at most this many requests at once, each a little later, and refuse the rest with 403 (115's CDN).
+    nonisolated(unsafe) private static var limits: [String: Int] = [:]
+    nonisolated(unsafe) private static var active: [String: Int] = [:]
+    nonisolated(unsafe) private static var refused: [String: Int] = [:]
+    nonisolated(unsafe) private static var cancelled: [String: Int] = [:]
+    /// Whether this request was answered, so a stop before that is a cancel.
+    private var answered = false
     static let configuration: URLSessionConfiguration = {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [RangeServer.self]
@@ -197,26 +263,40 @@ final class RangeServer: URLProtocol, @unchecked Sendable {
     }()
     static let session = URLSession(configuration: configuration)
     /// `restOfFile` answers every range with everything from its start, as a plugin's drive proxy does.
-    static func add(_ name: String, _ data: Data, restOfFile: Bool = false, empty: Int = 0, cap: Int? = nil) -> URL {
+    static func add(_ name: String, _ data: Data, restOfFile: Bool = false, empty: Int = 0, cap: Int? = nil, connections: Int? = nil) -> URL {
         lock.withLock {
             files[name] = data
             if restOfFile { Self.restOfFile.insert(name) }
             if empty > 0 || cap != nil { faults[name] = (empty, cap) }
+            if let connections { limits[name] = connections }
         }
         return URL(string: "https://cloud.test/\(name)")!
     }
     /// How many requests a file was asked for.
     static func requests(_ name: String) -> Int { lock.withLock { counts[name, default: 0] } }
+    /// How many requests a file with a connection limit refused.
+    static func refusals(_ name: String) -> Int { lock.withLock { refused[name, default: 0] } }
+    /// How many requests to a file with a connection limit were cancelled before their answer.
+    static func cancels(_ name: String) -> Int { lock.withLock { cancelled[name, default: 0] } }
     override class func canInit(with request: URLRequest) -> Bool { request.url?.host() == "cloud.test" }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
         guard let url = request.url, let client else { return }
         let name = url.lastPathComponent
-        let (file, toEnd, fault) = Self.lock.withLock {
+        let (file, toEnd, fault, limited, refuse) = Self.lock.withLock {
             Self.counts[name, default: 0] += 1
             let fault = Self.faults[name]
             if let fault, fault.empty > 0 { Self.faults[name]?.empty -= 1 }
-            return (Self.files[name], Self.restOfFile.contains(name), fault)
+            let limit = Self.limits[name]
+            let refuse = limit.map { Self.active[name, default: 0] >= $0 } ?? false
+            if refuse { Self.refused[name, default: 0] += 1 } else if limit != nil { Self.active[name, default: 0] += 1 }
+            return (Self.files[name], Self.restOfFile.contains(name), fault, limit != nil, refuse)
+        }
+        if refuse {
+            let body = Data("{\"state\":false,\"msg\":\"too many connections\"}".utf8)
+            client.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: 403, httpVersion: "HTTP/1.1", headerFields: ["Content-Length": "\(body.count)"])!, cacheStoragePolicy: .notAllowed)
+            client.urlProtocol(self, didLoad: body)
+            client.urlProtocolDidFinishLoading(self); return
         }
         guard let data = file else {
             client.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: 404, httpVersion: "HTTP/1.1", headerFields: [:])!, cacheStoragePolicy: .notAllowed)
@@ -235,9 +315,25 @@ final class RangeServer: URLProtocol, @unchecked Sendable {
         }
         var headers = ["Content-Length": "\(range.count)", "Content-Type": "application/octet-stream"]
         if status == 206 { headers["Content-Range"] = "bytes \(range.lowerBound)-\(range.upperBound - 1)/\(data.count)" }
-        client.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: headers)!, cacheStoragePolicy: .notAllowed)
-        client.urlProtocol(self, didLoad: data.subdata(in: range))
-        client.urlProtocolDidFinishLoading(self)
+        guard limited else {
+            client.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: headers)!, cacheStoragePolicy: .notAllowed)
+            client.urlProtocol(self, didLoad: data.subdata(in: range))
+            client.urlProtocolDidFinishLoading(self); return
+        }
+        // Held open for a while, so the stream's other connections overlap it.
+        let body = data.subdata(in: range)
+        DispatchQueue.global().asyncAfter(deadline: .now() + .milliseconds(40)) { [self, status, headers] in
+            RangeServer.lock.withLock { self.answered = true }
+            if let client = self.client {
+                client.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: headers)!, cacheStoragePolicy: .notAllowed)
+                client.urlProtocol(self, didLoad: body)
+                client.urlProtocolDidFinishLoading(self)
+            }
+            RangeServer.lock.withLock { RangeServer.active[name, default: 1] -= 1 }
+        }
     }
-    override func stopLoading() {}
+    override func stopLoading() {
+        guard let name = request.url?.lastPathComponent else { return }
+        Self.lock.withLock { if Self.limits[name] != nil, !answered { Self.cancelled[name, default: 0] += 1 } }
+    }
 }

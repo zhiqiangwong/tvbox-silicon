@@ -259,6 +259,8 @@ public struct Subscription: Codable, Sendable {
     public static func parse(_ data: Data, origin: URL) throws -> Subscription {
         let raw: [String: JSONValue]
         do { raw = try SubscriptionDocument.decode(data) } catch {
+            // A lone Python or JavaScript spider imports as a subscription that holds just that source.
+            if let single = singleSpider(data, origin: origin) { return single }
             // A bare M3U / TXT live playlist imports as a subscription that holds just that playlist.
             guard isLivePlaylist(data, origin: origin) else { throw error }
             return Subscription(origin: origin, importedAt: Date(), sites: [],
@@ -272,14 +274,14 @@ public struct Subscription: Codable, Sendable {
         let sites = (raw["sites"]?.array ?? []).compactMap { entry -> Site? in
             guard let v = entry.object, let key = v["key"]?.string, !key.isEmpty,
                   let api = v["api"]?.string, let type = v["type"]?.int, seen.insert(key).inserted else { return nil }
-            return Site(key: key, name: v["name"]?.string ?? key, type: type, api: api, raw: v)
+            return Site(key: key, name: Site.localizedName(v) ?? v["name"]?.string ?? key, type: type, api: api, raw: v)
         }
         let lives = (raw["lives"]?.array ?? []).compactMap { entry -> LiveSource? in
             guard let v = entry.object, let address = v["url"]?.string,
-                  let url = try? WebAddress.resolve(address, relativeTo: origin) else { return nil }
+                  let url = (try? WebAddress.resolve(address, relativeTo: origin)) ?? LiveCatalog.platformAddress(address) else { return nil }
             var headers = v["header"]?.object?.compactMapValues(\.string) ?? [:]
             if let ua = v["ua"]?.string { headers["User-Agent"] = ua }
-            return LiveSource(name: v["name"]?.string ?? L10n.text("Live TV"), url: url, headers: headers)
+            return LiveSource(name: Site.localizedName(v) ?? v["name"]?.string ?? L10n.text("Live TV"), url: url, headers: headers)
         }
         guard !sites.isEmpty || !lives.isEmpty else { throw TVError.invalidConfiguration }
         return Subscription(origin: origin, importedAt: Date(), sites: sites, lives: lives, raw: raw)
